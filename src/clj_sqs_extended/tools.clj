@@ -2,8 +2,7 @@
   "Provides the core functionalities of the wrapped library."
   (:require [clojure.tools.logging :as log]
             [tick.alpha.api :as t])
-  (:import [java.util UUID]
-           [com.amazonaws.services.s3.model ListVersionsRequest]))
+  (:import [java.util UUID]))
 
 
 (defn random-bucket-name
@@ -27,20 +26,3 @@
     (.getMessageId message)
     (.getReceiptHandle message)
     (subs (.getBody message) 0 5)))
-
-(defn purge-bucket
-  "Deletes the passed bucket including all meta-information (summaries, versions) via
-   the passed S3 interface."
-  [s3 bucket-name]
-  (letfn [(delete-object-summaries [s]
-            (.deleteObject s3 bucket-name (.getKey s)))
-          (delete-object-versions [v]
-            (.deleteVersion s3 bucket-name (.getKey v) (.getVersionId v)))]
-    (loop [objects (.listObjects s3 bucket-name)]
-      (map delete-object-summaries (.getObjectSummaries objects))
-      (when (.isTruncated objects)
-        (recur (.listNextBatchOfObjects objects))))
-    (let [version-request (-> (ListVersionsRequest.) (.withBucketName bucket-name))
-          version-list (.listVersions s3 version-request)]
-      (map delete-object-versions (.getVersionSummaries version-list)))
-    (.deleteBucket s3 bucket-name)))

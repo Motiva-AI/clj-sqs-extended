@@ -1,36 +1,28 @@
 (ns clj-sqs-extended.core-test
   "Basic tests for the primary API of `clj-extended-sqs`."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [clj-sqs-extended.core :as sqs-ext]
-            [clj-sqs-extended.test-helpers :as helpers]))
+            [clj-sqs-extended.test-fixtures :refer [with-localstack-environment
+                                                    localstack-sqs
+                                                    test-queue]]))
 
-; TODO: Use fixtures instead of the helpers.
 
-
-(def ^:private localstack (helpers/localstack-client))
+(use-fixtures :once with-localstack-environment)
 
 (def ^:private test-message "What hath God wrought?")
 
 
-(deftest ^:unit test-create-queue
-  (testing "Creating queue"
-    (let [result (sqs-ext/create-queue localstack)]
-      (is (= com.amazonaws.services.sqs.model.CreateQueueResult
-             (class result))))))
-
 (deftest ^:unit test-send-receive-message
   (testing "Sending/Receiving message"
-    (let [queue (sqs-ext/create-queue localstack)
-          url (.getQueueUrl queue)]
-      (sqs-ext/send-message-on-queue localstack url test-message)
-      (let [reply (sqs-ext/receive-messages-on-queue localstack url)]
+    (let [url (.getQueueUrl (test-queue))]
+      (sqs-ext/send-message-on-queue (localstack-sqs) url test-message)
+      (let [reply (sqs-ext/receive-messages-on-queue (localstack-sqs) url)]
         (is (= 1 (count reply)))
         (is (= test-message (.getBody (first reply))))))))
 
-(deftest ^:unit delete-message
-  (testing "Deleting messages"
-    (let [queue (sqs-ext/create-queue localstack)
-          url (.getQueueUrl queue)]
-      (sqs-ext/send-message-on-queue localstack url test-message)
-      (let [messages (sqs-ext/receive-messages-on-queue localstack url)]
-        (sqs-ext/delete-messages-on-queue localstack url messages)))))
+(deftest ^:unit delete-single-message
+  (testing "Deleting single message"
+    (let [url (.getQueueUrl (test-queue))]
+      (sqs-ext/send-message-on-queue (localstack-sqs) url test-message)
+      (let [messages (sqs-ext/receive-messages-on-queue (localstack-sqs) url)]
+        (sqs-ext/delete-messages-on-queue (localstack-sqs) url messages)))))

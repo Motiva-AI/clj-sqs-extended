@@ -2,6 +2,7 @@
   "Provides the core functionalities of the wrapped library."
   (:require [clj-sqs-extended.tools :as tools])
   (:import [com.amazonaws.services.s3 AmazonS3ClientBuilder]
+           [com.amazonaws.services.s3.model ListVersionsRequest]
            [com.amazonaws.services.sqs AmazonSQSClientBuilder]
            [com.amazon.sqs.javamessaging
               AmazonSQSExtendedClient
@@ -14,7 +15,9 @@
               BucketLifecycleConfiguration
               BucketLifecycleConfiguration$Rule]))
 
+
 (defn configure-endpoint
+  "Creates an endpoint configuration for the passed url and region."
   [url region]
   (AwsClientBuilder$EndpointConfiguration. url region))
 
@@ -56,6 +59,23 @@
          (.setBucketLifecycleConfiguration name lifecycle))
    name))
 
+(defn purge-bucket
+  "Deletes the passed bucket including all meta-information (summaries, versions) via
+   the passed S3 interface."
+  [s3-client bucket-name]
+  (letfn [(delete-object-summaries [s]
+            (.deleteObject s3-client bucket-name (.getKey s)))
+          (delete-object-versions [v]
+            (.deleteVersion s3-client bucket-name (.getKey v) (.getVersionId v)))]
+    (loop [objects (.listObjects s3-client bucket-name)]
+      (map delete-object-summaries (.getObjectSummaries objects))
+      (when (.isTruncated objects)
+        (recur (.listNextBatchOfObjects objects))))
+    (let [version-request (-> (ListVersionsRequest.) (.withBucketName bucket-name))
+          version-list (.listVersions s3-client version-request)]
+      (map delete-object-versions (.getVersionSummaries version-list)))
+    (.deleteBucket s3-client bucket-name)))
+
 (defn create-queue
   "Creates a new queue with the passed name via the passed sqs client interface."
   ([sqs-client]
@@ -63,21 +83,28 @@
   ([sqs-client name]
    (.createQueue sqs-client name)))
 
+(defn delete-queue
+  "Deletes the queue at the passed URL via the passed sqs client interface."
+  [sqs-client url]
+  (.deleteQueue sqs-client url))
+
 (defn send-message-on-queue
   "Sends the passed message data on the url of the provided sqs-client."
   [sqs-client queue-url message]
   (.sendMessage sqs-client queue-url message))
 
 (defn receive-messages-on-queue
-  "Receives messages at the passed queue url via the provided sqs interface."
-  [sqs url]
+  "Receives messages at the passed queue url via the provided SQS interface."
+  [sqs-client url]
   (let [request (doto (ReceiveMessageRequest. url)
                       (.setWaitTimeSeconds (int 10))
                       (.setMaxNumberOfMessages (int 10)))
-        result (.receiveMessage sqs request)]
+        result (.receiveMessage sqs-client request)]
     (.getMessages result)))
 
 (defn delete-messages-on-queue
-  [sqs url batch]
+  "Deletes the batch of passed messages in the passed queue URL via the provided
+   SQS interface."
+  [sqs-client url batch]
   (doseq [message batch]
-    (.deleteMessage sqs (DeleteMessageRequest. url (.getReceiptHandle message)))))
+    (.deleteMessage sqs-client (DeleteMessageRequest. url (.getReceiptHandle message)))))
