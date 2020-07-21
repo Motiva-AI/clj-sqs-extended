@@ -1,6 +1,7 @@
 (ns clj-sqs-extended.core
   "Provides the core functionalities of the wrapped library."
-  (:require [clj-sqs-extended.tools :as tools])
+  (:require [clj-sqs-extended.tools :as tools]
+            [clojure.tools.logging :as log])
   (:import [com.amazonaws.services.s3 AmazonS3ClientBuilder]
            [com.amazonaws.services.s3.model ListVersionsRequest]
            [com.amazonaws.services.sqs AmazonSQSClientBuilder]
@@ -63,17 +64,24 @@
   "Deletes the passed bucket including all meta-information (summaries, versions) via
    the passed S3 interface."
   [s3-client bucket-name]
-  (letfn [(delete-object-summaries [s]
-            (.deleteObject s3-client bucket-name (.getKey s)))
-          (delete-object-versions [v]
-            (.deleteVersion s3-client bucket-name (.getKey v) (.getVersionId v)))]
+  (letfn [(delete-objects [objects]
+                          (doseq [o objects]
+                            (let [key (.getKey o)]
+                              (log/infof "Deleting object '%s'." key)
+                              (.deleteObject s3-client bucket-name key))))
+          (delete-object-versions [versions]
+                                  (doseq [v versions]
+                                    (let [key (.getKey v)
+                                          id (.getVersionId v)]
+                                      (log/infof "Deleting version with id '%s' of '%s'." id key)
+                                      (.deleteVersion s3-client bucket-name key id))))]
     (loop [objects (.listObjects s3-client bucket-name)]
-      (map delete-object-summaries (.getObjectSummaries objects))
+      (delete-objects (.getObjectSummaries objects))
       (when (.isTruncated objects)
         (recur (.listNextBatchOfObjects objects))))
     (let [version-request (-> (ListVersionsRequest.) (.withBucketName bucket-name))
-          version-list (.listVersions s3-client version-request)]
-      (map delete-object-versions (.getVersionSummaries version-list)))
+          versions (->> (.listVersions s3-client version-request) (.getVersionSummaries))]
+      (delete-object-versions versions))
     (.deleteBucket s3-client bucket-name)))
 
 (defn create-queue

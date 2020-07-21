@@ -6,17 +6,21 @@
 
 
 (defn random-bucket-name
-  "Creates a random name for the test bucket."
   []
   (str (UUID/randomUUID)
        "-"
        (t/format (t/formatter "yyMMdd-hhmmss") (t/date-time))))
 
 (defn random-queue-name
-  "Creates a random name for a dummy queue."
   []
   (str "queue-"
        (UUID/randomUUID)))
+
+(defn random-string-with-length
+  [length]
+  (->> (repeatedly #(char (+ 40 (rand 86))))
+       (take length)
+       (apply str)))
 
 (defn peak-message
   "Dumps some information about the passed SQS message on the screen for verification."
