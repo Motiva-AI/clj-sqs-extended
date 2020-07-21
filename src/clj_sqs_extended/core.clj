@@ -10,25 +10,8 @@
               ExtendedClientConfiguration]
            [com.amazonaws.services.sqs.model
               ReceiveMessageRequest
-              DeleteMessageRequest]
-           [com.amazonaws.client.builder AwsClientBuilder$EndpointConfiguration]
-           [com.amazonaws.services.s3.model
-              BucketLifecycleConfiguration
-              BucketLifecycleConfiguration$Rule]))
+              DeleteMessageRequest]))
 
-
-(defn configure-endpoint
-  "Creates an endpoint configuration for the passed url and region."
-  [url region]
-  (AwsClientBuilder$EndpointConfiguration. url region))
-
-(defn configure-bucket-lifecycle
-  "Creates a bucket lifecylce configuration with the passed status and expiration in days."
-  [status expiration-days]
-  (let [expiration (-> (BucketLifecycleConfiguration$Rule.)
-                       (.withStatus status)
-                       (.withExpirationInDays expiration-days))]
-    (.withRules (BucketLifecycleConfiguration.) [expiration])))
 
 (defn s3-client
   "Initializes a new S3 client with the passed settings."
@@ -53,7 +36,7 @@
   ([s3-client]
    (create-bucket s3-client (tools/random-bucket-name)))
   ([s3-client name]
-   (create-bucket s3-client name (configure-bucket-lifecycle "Enabled" 14)))
+   (create-bucket s3-client name (tools/configure-bucket-lifecycle "Enabled" 14)))
   ([s3-client name lifecycle]
    (doto s3-client
          (.createBucket name)
@@ -67,13 +50,13 @@
   (letfn [(delete-objects [objects]
                           (doseq [o objects]
                             (let [key (.getKey o)]
-                              (log/infof "Deleting object '%s'." key)
+                              (log/debugf "Deleting object '%s'." key)
                               (.deleteObject s3-client bucket-name key))))
           (delete-object-versions [versions]
                                   (doseq [v versions]
                                     (let [key (.getKey v)
                                           id (.getVersionId v)]
-                                      (log/infof "Deleting version with id '%s' of '%s'." id key)
+                                      (log/debugf "Deleting version with id '%s' of '%s'." id key)
                                       (.deleteVersion s3-client bucket-name key id))))]
     (loop [objects (.listObjects s3-client bucket-name)]
       (delete-objects (.getObjectSummaries objects))

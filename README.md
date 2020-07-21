@@ -1,5 +1,13 @@
 # clj-sqs-extended
 
+## Running the tests
+
+Tests can be run directly from the command line using the [clj-cli](https://clojure.org/guides/deps_and_cli) tool.
+
+```
+$> clj -A:test
+```
+
 ## API Highlight
 
 Create a worker for consuming an SQS queue (Paul: I'm not sure about this API for handle-queue yet):
@@ -103,4 +111,3 @@ sqs-utils.core/send-fifo-message
 => nil
 "I got potatoes"
 ```
-
