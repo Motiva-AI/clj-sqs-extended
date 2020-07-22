@@ -2,10 +2,14 @@
 
 ## Running the tests
 
-Tests can be run directly from the command line using the [clj-cli](https://clojure.org/guides/deps_and_cli) tool.
+Tests can be run the same way as they will be run via CircleCI.
+Please install the [circleci-cli-tool](https://circleci.com/docs/2.0/local-cli/)
+tool for your OS of choice and configure it according to the manual.
+
+Then spin up the entire infrastructure and run the tests with:
 
 ```
-$> clj -A:test
+$> circleci local execute --job build
 ```
 
 ## API Highlight
