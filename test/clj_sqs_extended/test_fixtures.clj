@@ -26,11 +26,6 @@
   []
   @bucket)
 
-(defn test-queue
-  "Tests should call this function to get a queue ready for testing."
-  []
-  @queue)
-
 (defn test-queue-url
   []
   (.getQueueUrl @queue))

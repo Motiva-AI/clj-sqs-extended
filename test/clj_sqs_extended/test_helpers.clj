@@ -3,7 +3,7 @@
 
 
 (defn configure-endpoint
-  "Creates an endpoint configuration for the passed url and region."
+  "Creates an AWS endpoint configuration for the passed url and region."
   [url region]
   (AwsClientBuilder$EndpointConfiguration. url region))
 

@@ -13,6 +13,8 @@
               DeleteMessageRequest]))
 
 
+; TODO: Since this is a SQS library, this functionality might better be
+;       moved down into some internal ns.
 (defn s3-client
   "Initializes a new S3 client with the passed settings."
   [configuration]
