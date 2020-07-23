@@ -6,7 +6,7 @@ jobs:
       - image: circleci/clojure:tools-deps-1.10.1.547
         environment:
           JVM_OPTS: -Xmx3200m
-          AWS_DEFAULT_REGION: us-east-1
+          AWS_DEFAULT_REGION: us-east-2
           AWS_SECRET_ACCESS_KEY: foo
           AWS_ACCESS_KEY_ID: bar
       - image: localstack/localstack
