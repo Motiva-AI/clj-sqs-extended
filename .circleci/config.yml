@@ -1,35 +1,32 @@
 version: 2
+
 jobs:
   build:
     docker:
       - image: circleci/clojure:tools-deps-1.10.1.547
+        environment:
+          JVM_OPTS: -Xmx3200m
+          AWS_DEFAULT_REGION: us-east-1
+          AWS_SECRET_ACCESS_KEY: foo
+          AWS_ACCESS_KEY_ID: bar
       - image: localstack/localstack
-      
-    working_directory: ~/clj-sqs-extended
-
-    environment:
-      DEBUG: 1
-      JVM_OPTS: -Xmx3200m
-      SERVICES: "sqs,s3"
-      AWS_DEFAULT_REGION: us-east-1
-      AWS_SECRET_ACCESS_KEY: foo
-      AWS_ACCESS_KEY_ID: bar
+        environment:
+          SERVICES: "sqs,s3"
 
     steps:
       - checkout
 
       - restore_cache:
           keys:
-          - dockerize-{{ arch }}-v0.6.1
-          - v2-dependencies-{{ checksum "deps.edn" }}
+          - v2-clj-sqs-extended-{{ checksum "deps.edn" }}
           # fallback to using the latest cache if no exact match is found
-          - v2-dependencies-
+          - v2-clj-sqs-extended-
 
       - run:
           name: Install dockerize if not cached
           command:
             if \[ -f /usr/local/bin/dockerize \]; then
-              echo "cached dockerize found; skipping installation";
+              echo "Found cached version of dockerize, skipping installation.";
             else
               wget https://github.com/jwilder/dockerize/releases/download/$DOCKERIZE_VERSION/dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz
               && tar -C /usr/local/bin -xzvf dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz
@@ -39,7 +36,7 @@ jobs:
       - run:
           name: Wait for LocalStack edge port to become ready
           command: dockerize -wait tcp://localhost:4566 -timeout 1m
-        
+
       - run:
           name: Run tests
           command: clojure -A:test
@@ -49,4 +46,4 @@ jobs:
             - ~/.m2
             - .cpcache
             - /usr/local/bin/dockerize
-          key: v2-dependencies-{{ checksum "deps.edn" }}
+          key: v2-clj-sqs-extended-{{ checksum "deps.edn" }}
