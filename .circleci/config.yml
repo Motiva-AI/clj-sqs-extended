@@ -21,9 +21,9 @@ jobs:
 
       - restore_cache:
           keys:
-          - v2-clj-sqs-extended-{{ checksum "deps.edn" }}
+          - v3-clj-sqs-extended-{{ checksum "deps.edn" }}
           # fallback to using the latest cache if no exact match is found
-          - v2-clj-sqs-extended-
+          - v3-clj-sqs-extended-
 
       - run:
           name: Install dockerize if not cached
@@ -49,4 +49,4 @@ jobs:
             - ~/dockerize
             - ~/.m2
             - .cpcache
-          key: v2-clj-sqs-extended-{{ checksum "deps.edn" }}
+          key: v3-clj-sqs-extended-{{ checksum "deps.edn" }}
