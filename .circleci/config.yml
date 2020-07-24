@@ -13,6 +13,9 @@ jobs:
         environment:
           SERVICES: "sqs,s3"
 
+    environment:
+      DOCKERIZE_VERSION: v0.6.1
+
     steps:
       - checkout
 
@@ -25,11 +28,11 @@ jobs:
       - run:
           name: Install dockerize if not cached
           command:
-            if \[ -f /usr/local/bin/dockerize \]; then
+            if \[ -f ~/dockerize \]; then
               echo "Found cached version of dockerize, skipping installation.";
             else
               wget https://github.com/jwilder/dockerize/releases/download/$DOCKERIZE_VERSION/dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz
-              && tar -C /usr/local/bin -xzvf dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz
+              && tar -C ~ -xzvf dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz
               && rm dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz;
             fi
 
@@ -43,7 +46,7 @@ jobs:
 
       - save_cache:
           paths:
+            - ~/dockerize
             - ~/.m2
             - .cpcache
-            - /usr/local/bin/dockerize
           key: v2-clj-sqs-extended-{{ checksum "deps.edn" }}
