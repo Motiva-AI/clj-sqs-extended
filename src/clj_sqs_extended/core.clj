@@ -12,23 +12,24 @@
               DeleteMessageRequest]))
 
 
-; TODO: Since this is a SQS library, this functionality might better be
-;       moved down into some internal ns.
+; TODO: Since this is a SQS library, this functionality might better be moved into some internal ns.
 (defn s3-client
   "Initializes a new S3 client with the passed settings."
-  [configuration]
+  [endpoint credentials]
   (let [builder (-> (AmazonS3ClientBuilder/standard)
                     (.withPathStyleAccessEnabled true))
-        builder (if configuration (.withEndpointConfiguration builder configuration) builder)]
+        builder (if endpoint (.withEndpointConfiguration builder endpoint) builder)
+        builder (if credentials (.withCredentials builder credentials) builder)]
     (.build builder)))
 
 (defn sqs-client
   "Initializes a new SQS extended client with the passed settings."
-  [s3-client bucket configuration]
+  [s3-client bucket endpoint credentials]
   (let [sqs-config (-> (ExtendedClientConfiguration.)
                        (.withLargePayloadSupportEnabled s3-client bucket))
         builder (AmazonSQSClientBuilder/standard)
-        builder (if configuration (.withEndpointConfiguration builder configuration) builder)]
+        builder (if endpoint (.withEndpointConfiguration builder endpoint) builder)
+        builder (if credentials (.withCredentials builder credentials) builder)]
     (AmazonSQSExtendedClient. (.build builder) sqs-config)))
 
 (defn create-bucket
@@ -85,13 +86,26 @@
 
 (defn receive-messages-on-queue
   "Receives messages at the passed queue url via the provided SQS interface."
-  [sqs-client url]
-  (let [request (doto (ReceiveMessageRequest. url)
-                  (.setWaitTimeSeconds (int 10))
-                  (.setMaxNumberOfMessages (int 10)))
-        result (.receiveMessage sqs-client request)]
-    (map #(-> (bean %) (select-keys [:messageId :receiptHandle :body]))
-         (.getMessages result))))
+  ([sqs-client url]
+   (receive-messages-on-queue sqs-client url {}))
+  ([sqs-client url
+    {:keys [timeout
+            max-messages
+            visibility-timeout]
+     :or   {timeout            0
+            max-messages       1
+            visibility-timeout false}
+     :as opts}]
+   (let [request (doto (ReceiveMessageRequest. url)
+                   (.setWaitTimeSeconds (int timeout))
+                   (.setMaxNumberOfMessages (int max-messages)))
+         result (.receiveMessage sqs-client request)
+         messages (map #(-> (bean %) (select-keys [:messageId :receiptHandle :body]))
+                        (.getMessages result))]
+     (when visibility-timeout
+       (doseq [m messages]
+         (.changeMessageVisibility url (:receiptHandle m) (int visibility-timeout))))
+     messages)))
 
 (defn delete-messages-on-queue
   "Deletes the batch of passed messages in the passed queue URL via the provided

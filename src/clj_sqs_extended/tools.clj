@@ -19,7 +19,6 @@
        (UUID/randomUUID)))
 
 (defn configure-bucket-lifecycle
-  "Creates a bucket lifecylce configuration with the passed status and expiration in days."
   [status expiration-days]
   (let [expiration (-> (BucketLifecycleConfiguration$Rule.)
                        (.withStatus status)

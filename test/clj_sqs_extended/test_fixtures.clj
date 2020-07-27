@@ -37,12 +37,14 @@
         test-bucket-name (tools/random-bucket-name)
         localstack-endpoint (helpers/configure-endpoint
                                "http://localhost:4566"
-                               "us-east-2")]
-    (reset! s3-client (sqs-ext/s3-client localstack-endpoint))
+                               "us-east-2")
+        localstack-creds (helpers/configure-credentials "localstack" "localstack")]
+    (reset! s3-client (sqs-ext/s3-client localstack-endpoint localstack-creds))
     (reset! bucket (sqs-ext/create-bucket @s3-client test-bucket-name))
     (reset! sqs-client (sqs-ext/sqs-client @s3-client
                                        @bucket
-                                       localstack-endpoint))
+                                       localstack-endpoint
+                                       localstack-creds))
     (reset! queue (sqs-ext/create-queue @sqs-client test-queue-name))
     (f)
     (sqs-ext/delete-queue @sqs-client (test-queue-url))
