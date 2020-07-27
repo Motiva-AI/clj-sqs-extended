@@ -56,4 +56,4 @@ jobs:
             - ~/dockerize
             - ~/.m2
             - .cpcache
-          key: v3-clj-sqs-extended-{{ checksum "project.clj" }}
+          key: v4-clj-sqs-extended-{{ checksum "project.clj" }}
