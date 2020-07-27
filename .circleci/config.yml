@@ -3,7 +3,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: circleci/clojure:tools-deps-1.10.1.547
+      - image: circleci/clojure:lein-2.9.3
         environment:
           JVM_OPTS: -Xmx3200m
           AWS_DEFAULT_REGION: us-east-2
@@ -21,9 +21,13 @@ jobs:
 
       - restore_cache:
           keys:
-          - v3-clj-sqs-extended-{{ checksum "deps.edn" }}
+          - v4-clj-sqs-extended-{{ checksum "project.clj" }}
           # fallback to using the latest cache if no exact match is found
-          - v3-clj-sqs-extended-
+          - v4-clj-sqs-extended-
+
+      - run:
+          name: Install dependencies
+          command: lein -U deps
 
       - run:
           name: Install dockerize if not cached
@@ -42,11 +46,14 @@ jobs:
 
       - run:
           name: Run tests
-          command: clojure -A:test
+          command: lein test :all
+
+      - store_test_results:
+          path: ~/test_output
 
       - save_cache:
           paths:
             - ~/dockerize
             - ~/.m2
             - .cpcache
-          key: v3-clj-sqs-extended-{{ checksum "deps.edn" }}
+          key: v3-clj-sqs-extended-{{ checksum "project.clj" }}
