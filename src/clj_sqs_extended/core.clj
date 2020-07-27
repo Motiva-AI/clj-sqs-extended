@@ -1,7 +1,6 @@
 (ns clj-sqs-extended.core
   "Provides the core functionalities of the wrapped library."
-  (:require [clj-sqs-extended.tools :as tools]
-            [clojure.tools.logging :as log])
+  (:require [clj-sqs-extended.tools :as tools])
   (:import [com.amazonaws.services.s3 AmazonS3ClientBuilder]
            [com.amazonaws.services.s3.model ListVersionsRequest]
            [com.amazonaws.services.sqs AmazonSQSClientBuilder]
@@ -52,13 +51,11 @@
   (letfn [(delete-objects [objects]
                           (doseq [o objects]
                             (let [key (.getKey o)]
-                              (log/debugf "Deleting object '%s'." key)
                               (.deleteObject s3-client bucket-name key))))
           (delete-object-versions [versions]
                                   (doseq [v versions]
                                     (let [key (.getKey v)
                                           id (.getVersionId v)]
-                                      (log/debugf "Deleting version with id '%s' of '%s'." id key)
                                       (.deleteVersion s3-client bucket-name key id))))]
     (loop [objects (.listObjects s3-client bucket-name)]
       (delete-objects (.getObjectSummaries objects))
@@ -90,14 +87,15 @@
   "Receives messages at the passed queue url via the provided SQS interface."
   [sqs-client url]
   (let [request (doto (ReceiveMessageRequest. url)
-                      (.setWaitTimeSeconds (int 10))
-                      (.setMaxNumberOfMessages (int 10)))
+                  (.setWaitTimeSeconds (int 10))
+                  (.setMaxNumberOfMessages (int 10)))
         result (.receiveMessage sqs-client request)]
-    (.getMessages result)))
+    (map #(-> (bean %) (select-keys [:messageId :receiptHandle :body]))
+         (.getMessages result))))
 
 (defn delete-messages-on-queue
   "Deletes the batch of passed messages in the passed queue URL via the provided
    SQS interface."
   [sqs-client url batch]
   (doseq [message batch]
-    (.deleteMessage sqs-client (DeleteMessageRequest. url (.getReceiptHandle message)))))
+    (.deleteMessage sqs-client (DeleteMessageRequest. url (:receiptHandle message)))))

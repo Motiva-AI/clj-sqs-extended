@@ -17,7 +17,7 @@
       (sqs-ext/send-message-on-queue (fixtures/localstack-sqs) url test-message)
       (let [reply (sqs-ext/receive-messages-on-queue (fixtures/localstack-sqs) url)]
         (is (= 1 (count reply)))
-        (is (= test-message (.getBody (first reply))))))))
+        (is (= test-message (:body (first reply))))))))
 
 (deftest ^:unit delete-single-message
   (testing "Deleting single message"
@@ -33,6 +33,6 @@
       (sqs-ext/send-message-on-queue (fixtures/localstack-sqs) url test-message-larger-than-256kb)
       (let [messages (sqs-ext/receive-messages-on-queue (fixtures/localstack-sqs) url)
             desired-length (count test-message-larger-than-256kb)
-            reply-length (->> (first messages) (.getBody) (count))]
+            reply-length (->> (first messages) :body (count))]
         (is (= 1 (count messages)))
         (is (= desired-length reply-length))))))
