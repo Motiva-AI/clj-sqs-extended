@@ -3,8 +3,8 @@
   (:require [tick.alpha.api :as t])
   (:import [java.util UUID]
            [com.amazonaws.services.s3.model
-              BucketLifecycleConfiguration
-              BucketLifecycleConfiguration$Rule]))
+            BucketLifecycleConfiguration
+            BucketLifecycleConfiguration$Rule]))
 
 
 (defn random-bucket-name

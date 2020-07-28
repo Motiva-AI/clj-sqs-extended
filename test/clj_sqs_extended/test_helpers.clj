@@ -1,8 +1,8 @@
 (ns clj-sqs-extended.test-helpers
   (:import [com.amazonaws.client.builder AwsClientBuilder$EndpointConfiguration]
            [com.amazonaws.auth
-              BasicAWSCredentials
-              AWSStaticCredentialsProvider]))
+            BasicAWSCredentials
+            AWSStaticCredentialsProvider]))
 
 
 (defn configure-endpoint
@@ -19,3 +19,15 @@
   (->> (repeatedly #(char (+ 40 (rand 86))))
        (take length)
        (apply str)))
+
+(defn get-total-message-amount-in-queue
+  [sqs-client url]
+  (let [requested-attributes ["ApproximateNumberOfMessages"
+                              "ApproximateNumberOfMessagesNotVisible"
+                              "ApproximateNumberOfMessagesDelayed"]
+        result (.getQueueAttributes sqs-client url requested-attributes)]
+    (->> (.getAttributes result)
+         (vals)
+         (map read-string)
+         (reduce +))))
+
