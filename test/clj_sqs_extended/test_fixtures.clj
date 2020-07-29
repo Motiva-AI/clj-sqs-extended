@@ -1,6 +1,6 @@
 (ns clj-sqs-extended.test-fixtures
   (:require [clj-sqs-extended.core :as sqs-ext]
-            [clj-sqs-extended.tools :as tools]
+            [clj-sqs-extended.s3 :as s3]
             [clj-sqs-extended.test-helpers :as helpers]))
 
 
@@ -34,10 +34,10 @@
         localstack-creds (helpers/configure-credentials
                            "localstack"
                            "localstack")
-        s3-client (tools/s3-client localstack-endpoint
-                                   localstack-creds)
-        bucket (tools/create-bucket s3-client
-                                    bucket-name)]
+        s3-client (s3/s3-client localstack-endpoint
+                                localstack-creds)
+        bucket (s3/create-bucket s3-client
+                                 bucket-name)]
     (reset! ext-sqs-client (sqs-ext/ext-sqs-client bucket
                                                    localstack-endpoint
                                                    localstack-creds))
@@ -50,5 +50,5 @@
                           (test-queue-url))
     (sqs-ext/delete-queue @ext-sqs-client
                           (test-fifo-queue-url))
-    (tools/purge-bucket s3-client
-                        bucket-name)))
+    (s3/purge-bucket s3-client
+                     bucket-name)))
