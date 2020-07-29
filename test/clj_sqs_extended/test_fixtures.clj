@@ -39,7 +39,7 @@
   "Provides a complete set of S3/SQS localstack infrastructure for testing."
   [f]
   (let [test-queue-name (tools/random-queue-name)
-        test-fifo-queue-name (tools/random-queue-name)
+        test-fifo-queue-name (str (tools/random-queue-name) ".fifo")
         test-bucket-name (tools/random-bucket-name)
         localstack-endpoint (helpers/configure-endpoint
                               "http://localhost:4566"
@@ -55,10 +55,10 @@
                                            @bucket
                                            localstack-endpoint
                                            localstack-creds))
-    (reset! queue (sqs-ext/create-queue @sqs-client
-                                        test-queue-name))
-    (reset! fifo-queue (sqs-ext/create-queue @sqs-client
-                                             test-fifo-queue-name))
+    (reset! queue (sqs-ext/create-standard-queue @sqs-client
+                                                 test-queue-name))
+    (reset! fifo-queue (sqs-ext/create-fifo-queue @sqs-client
+                                                  test-fifo-queue-name))
     (f)
     (sqs-ext/delete-queue @sqs-client
                           (test-queue-url))

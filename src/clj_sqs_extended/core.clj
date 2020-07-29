@@ -9,12 +9,13 @@
             ExtendedClientConfiguration]
            [com.amazonaws.services.sqs.model
             CreateQueueRequest
+            SendMessageRequest
             ReceiveMessageRequest
             DeleteMessageRequest
             PurgeQueueRequest]))
 
 
-; TODO: Move into some internal ns.
+; TODO: Move into some internal tooling ns.
 (defn s3-client
   [endpoint credentials]
   (let [builder (-> (AmazonS3ClientBuilder/standard)
@@ -23,6 +24,7 @@
         builder (if credentials (.withCredentials builder credentials) builder)]
     (.build builder)))
 
+; TODO: s3-client to local binding with same credentials
 (defn sqs-client
   [s3-client bucket endpoint credentials]
   (let [sqs-config (-> (ExtendedClientConfiguration.)
@@ -32,6 +34,7 @@
         builder (if credentials (.withCredentials builder credentials) builder)]
     (AmazonSQSExtendedClient. (.build builder) sqs-config)))
 
+; TODO: Move into some internal tooling ns.
 (defn create-bucket
   ([s3-client]
    (create-bucket s3-client (tools/random-bucket-name)))
@@ -43,6 +46,7 @@
      (.setBucketLifecycleConfiguration name lifecycle))
    name))
 
+; TODO: Move into some internal tooling ns.
 (defn purge-bucket
   [s3-client bucket-name]
   (letfn [(delete-objects [objects]
@@ -63,14 +67,11 @@
       (delete-object-versions versions))
     (.deleteBucket s3-client bucket-name)))
 
-(defn create-queue
-  ([sqs-client]
-   (create-queue sqs-client (tools/random-queue-name) {}))
+(defn- create-queue
   ([sqs-client name]
    (create-queue sqs-client name {}))
   ([sqs-client name
     {:keys [fifo
-            visibility-timeout
             kms-master-key-id
             kms-data-key-reuse-period]
      :as   opts}]
@@ -78,9 +79,6 @@
      (when fifo
        (doto request (.addAttributesEntry
                        "FifoQueue" "true")))
-     (when visibility-timeout
-       (doto request (.addAttributesEntry
-                       "VisibilityTimeout" (str visibility-timeout))))
      (when kms-master-key-id
        (doto request (.addAttributesEntry
                        "KmsMasterKeyId" kms-master-key-id)))
@@ -88,6 +86,26 @@
        (doto request (.addAttributesEntry
                        "KmsDataKeyReusePeriodSeconds" kms-data-key-reuse-period)))
      (.createQueue sqs-client request))))
+
+(defn create-standard-queue
+  ([sqs-client name]
+   (create-queue sqs-client name {}))
+  ([sqs-client name
+    {:keys [kms-master-key-id
+            kms-data-key-reuse-period]
+     :as   opts}]
+   (create-queue sqs-client name opts)))
+
+(defn create-fifo-queue
+  ([sqs-client name]
+   (create-queue sqs-client name {:fifo true}))
+  ([sqs-client name
+    {:keys [fifo
+            kms-master-key-id
+            kms-data-key-reuse-period]
+     :or   {fifo true}
+     :as   opts}]
+   (create-queue sqs-client name opts)))
 
 (defn purge-queue
   [sqs-client url]
@@ -98,39 +116,44 @@
   [sqs-client url]
   (.deleteQueue sqs-client url))
 
-(defn send-message-on-queue
-  [sqs-client queue-url message]
-  (.sendMessage sqs-client queue-url message))
+(defn send-message
+  [sqs-client url message]
+  (.sendMessage sqs-client url message))
 
-(defn delete-messages-on-queue
-  [sqs-client url batch]
-  (doseq [message batch]
-    (let [request (DeleteMessageRequest. url (:receiptHandle message))]
-      (.deleteMessage sqs-client request))))
+(defn send-fifo-message
+  [sqs-client url message group-id]
+  (let [request (SendMessageRequest. url message)]
+    ; WATCHOUT: The group ID is mandatory when sending fifo messages.
+    (doto request (.setMessageGroupId group-id))
+    (.sendMessage sqs-client request)))
 
-(defn receive-messages-on-queue
+(defn delete-message
+  [sqs-client url message]
+  (let [request (DeleteMessageRequest. url (:receiptHandle message))]
+    (.deleteMessage sqs-client request)))
+
+(defn receive-message
   ([sqs-client url]
-   (receive-messages-on-queue sqs-client url {}))
+   (receive-message sqs-client url {}))
   ([sqs-client url
     {:keys [wait-time
-            max-messages
             visibility-timeout
             auto-delete]
-     :or   {wait-time    0
-            max-messages 1}
+     :or   {wait-time 0}
      :as   opts}]
-   (let [request (doto (ReceiveMessageRequest. url)
-                   (.setWaitTimeSeconds (int wait-time))
-                   (.setMaxNumberOfMessages (int max-messages)))
-         result (.receiveMessage sqs-client request)
-         messages (map #(-> (bean %) (select-keys [:messageId :receiptHandle :body]))
-                       (.getMessages result))]
-     (when visibility-timeout
-       (doseq [m messages]
+   (letfn [(extract-relevant-keys [message]
+             (-> (bean message)
+                 (select-keys [:messageId :receiptHandle :body])))]
+     (let [request (doto (ReceiveMessageRequest. url)
+                     (.setWaitTimeSeconds (int wait-time))
+                     (.setMaxNumberOfMessages (int 1)))
+           result (.receiveMessage sqs-client request)
+           message (->> (.getMessages result) (first) (extract-relevant-keys))]
+       (when visibility-timeout
          (.changeMessageVisibility sqs-client
                                    url
-                                   (:receiptHandle m)
-                                   (int visibility-timeout))))
-     (when auto-delete
-       (delete-messages-on-queue sqs-client url messages))
-     messages)))
+                                   (:receiptHandle message)
+                                   (int visibility-timeout)))
+       (when auto-delete
+         (delete-message sqs-client url message))
+       message))))
