@@ -3,8 +3,8 @@
   (:require [tick.alpha.api :as t])
   (:import [java.util UUID]
            [com.amazonaws.services.s3.model
-              BucketLifecycleConfiguration
-              BucketLifecycleConfiguration$Rule]))
+            BucketLifecycleConfiguration
+            BucketLifecycleConfiguration$Rule]))
 
 
 (defn random-bucket-name
@@ -19,7 +19,6 @@
        (UUID/randomUUID)))
 
 (defn configure-bucket-lifecycle
-  "Creates a bucket lifecylce configuration with the passed status and expiration in days."
   [status expiration-days]
   (let [expiration (-> (BucketLifecycleConfiguration$Rule.)
                        (.withStatus status)

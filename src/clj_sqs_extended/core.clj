@@ -1,65 +1,63 @@
 (ns clj-sqs-extended.core
   "Provides the core functionalities of the wrapped library."
-  (:require [clj-sqs-extended.tools :as tools]
-            [clojure.tools.logging :as log])
+  (:require [clj-sqs-extended.tools :as tools])
   (:import [com.amazonaws.services.s3 AmazonS3ClientBuilder]
            [com.amazonaws.services.s3.model ListVersionsRequest]
            [com.amazonaws.services.sqs AmazonSQSClientBuilder]
            [com.amazon.sqs.javamessaging
-              AmazonSQSExtendedClient
-              ExtendedClientConfiguration]
+            AmazonSQSExtendedClient
+            ExtendedClientConfiguration]
            [com.amazonaws.services.sqs.model
-              ReceiveMessageRequest
-              DeleteMessageRequest]))
+            CreateQueueRequest
+            SendMessageRequest
+            ReceiveMessageRequest
+            DeleteMessageRequest
+            PurgeQueueRequest]))
 
 
-; TODO: Since this is a SQS library, this functionality might better be
-;       moved down into some internal ns.
+; TODO: Move into some internal tooling ns.
 (defn s3-client
-  "Initializes a new S3 client with the passed settings."
-  [configuration]
+  [endpoint credentials]
   (let [builder (-> (AmazonS3ClientBuilder/standard)
                     (.withPathStyleAccessEnabled true))
-        builder (if configuration (.withEndpointConfiguration builder configuration) builder)]
+        builder (if endpoint (.withEndpointConfiguration builder endpoint) builder)
+        builder (if credentials (.withCredentials builder credentials) builder)]
     (.build builder)))
 
+; TODO: s3-client to local binding with same credentials
 (defn sqs-client
-  "Initializes a new SQS extended client with the passed settings."
-  [s3-client bucket configuration]
+  [s3-client bucket endpoint credentials]
   (let [sqs-config (-> (ExtendedClientConfiguration.)
                        (.withLargePayloadSupportEnabled s3-client bucket))
         builder (AmazonSQSClientBuilder/standard)
-        builder (if configuration (.withEndpointConfiguration builder configuration) builder)]
+        builder (if endpoint (.withEndpointConfiguration builder endpoint) builder)
+        builder (if credentials (.withCredentials builder credentials) builder)]
     (AmazonSQSExtendedClient. (.build builder) sqs-config)))
 
+; TODO: Move into some internal tooling ns.
 (defn create-bucket
-  "Creates a bucket with passed settings. Uses a random name and a lifecycle of 14 days if
-   no other settings are provided."
   ([s3-client]
    (create-bucket s3-client (tools/random-bucket-name)))
   ([s3-client name]
    (create-bucket s3-client name (tools/configure-bucket-lifecycle "Enabled" 14)))
   ([s3-client name lifecycle]
    (doto s3-client
-         (.createBucket name)
-         (.setBucketLifecycleConfiguration name lifecycle))
+     (.createBucket name)
+     (.setBucketLifecycleConfiguration name lifecycle))
    name))
 
+; TODO: Move into some internal tooling ns.
 (defn purge-bucket
-  "Deletes the passed bucket including all meta-information (summaries, versions) via
-   the passed S3 interface."
   [s3-client bucket-name]
   (letfn [(delete-objects [objects]
-                          (doseq [o objects]
-                            (let [key (.getKey o)]
-                              (log/debugf "Deleting object '%s'." key)
-                              (.deleteObject s3-client bucket-name key))))
+            (doseq [o objects]
+              (let [key (.getKey o)]
+                (.deleteObject s3-client bucket-name key))))
           (delete-object-versions [versions]
-                                  (doseq [v versions]
-                                    (let [key (.getKey v)
-                                          id (.getVersionId v)]
-                                      (log/debugf "Deleting version with id '%s' of '%s'." id key)
-                                      (.deleteVersion s3-client bucket-name key id))))]
+            (doseq [v versions]
+              (let [key (.getKey v)
+                    id (.getVersionId v)]
+                (.deleteVersion s3-client bucket-name key id))))]
     (loop [objects (.listObjects s3-client bucket-name)]
       (delete-objects (.getObjectSummaries objects))
       (when (.isTruncated objects)
@@ -69,35 +67,93 @@
       (delete-object-versions versions))
     (.deleteBucket s3-client bucket-name)))
 
-(defn create-queue
-  "Creates a new queue with the passed name via the passed sqs client interface."
-  ([sqs-client]
-   (create-queue sqs-client (tools/random-queue-name)))
+(defn- create-queue
   ([sqs-client name]
-   (.createQueue sqs-client name)))
+   (create-queue sqs-client name {}))
+  ([sqs-client name
+    {:keys [fifo
+            kms-master-key-id
+            kms-data-key-reuse-period]
+     :as   opts}]
+   (let [request (CreateQueueRequest. name)]
+     (when fifo
+       (doto request (.addAttributesEntry
+                       "FifoQueue" "true")))
+     (when kms-master-key-id
+       (doto request (.addAttributesEntry
+                       "KmsMasterKeyId" kms-master-key-id)))
+     (when kms-data-key-reuse-period
+       (doto request (.addAttributesEntry
+                       "KmsDataKeyReusePeriodSeconds" kms-data-key-reuse-period)))
+     (.createQueue sqs-client request))))
+
+(defn create-standard-queue
+  ([sqs-client name]
+   (create-queue sqs-client name {}))
+  ([sqs-client name
+    {:keys [kms-master-key-id
+            kms-data-key-reuse-period]
+     :as   opts}]
+   (create-queue sqs-client name opts)))
+
+(defn create-fifo-queue
+  ([sqs-client name]
+   (create-queue sqs-client name {:fifo true}))
+  ([sqs-client name
+    {:keys [fifo
+            kms-master-key-id
+            kms-data-key-reuse-period]
+     :or   {fifo true}
+     :as   opts}]
+   (create-queue sqs-client name opts)))
+
+(defn purge-queue
+  [sqs-client url]
+  (let [request (PurgeQueueRequest. url)]
+    (.purgeQueue sqs-client request)))
 
 (defn delete-queue
-  "Deletes the queue at the passed URL via the passed sqs client interface."
   [sqs-client url]
   (.deleteQueue sqs-client url))
 
-(defn send-message-on-queue
-  "Sends the passed message data on the url of the provided sqs-client."
-  [sqs-client queue-url message]
-  (.sendMessage sqs-client queue-url message))
+(defn send-message
+  [sqs-client url message]
+  (.sendMessage sqs-client url message))
 
-(defn receive-messages-on-queue
-  "Receives messages at the passed queue url via the provided SQS interface."
-  [sqs-client url]
-  (let [request (doto (ReceiveMessageRequest. url)
-                      (.setWaitTimeSeconds (int 10))
-                      (.setMaxNumberOfMessages (int 10)))
-        result (.receiveMessage sqs-client request)]
-    (.getMessages result)))
+(defn send-fifo-message
+  [sqs-client url message group-id]
+  (let [request (SendMessageRequest. url message)]
+    ; WATCHOUT: The group ID is mandatory when sending fifo messages.
+    (doto request (.setMessageGroupId group-id))
+    (.sendMessage sqs-client request)))
 
-(defn delete-messages-on-queue
-  "Deletes the batch of passed messages in the passed queue URL via the provided
-   SQS interface."
-  [sqs-client url batch]
-  (doseq [message batch]
-    (.deleteMessage sqs-client (DeleteMessageRequest. url (.getReceiptHandle message)))))
+(defn delete-message
+  [sqs-client url message]
+  (let [request (DeleteMessageRequest. url (:receiptHandle message))]
+    (.deleteMessage sqs-client request)))
+
+(defn receive-message
+  ([sqs-client url]
+   (receive-message sqs-client url {}))
+  ([sqs-client url
+    {:keys [wait-time
+            visibility-timeout
+            auto-delete]
+     :or   {wait-time 0}
+     :as   opts}]
+   (letfn [(extract-relevant-keys [message]
+             (-> (bean message)
+                 (select-keys [:messageId :receiptHandle :body])))]
+     (let [request (doto (ReceiveMessageRequest. url)
+                     (.setWaitTimeSeconds (int wait-time))
+                     (.setMaxNumberOfMessages (int 1)))
+           result (.receiveMessage sqs-client request)
+           message (->> (.getMessages result) (first) (extract-relevant-keys))]
+       (when visibility-timeout
+         (.changeMessageVisibility sqs-client
+                                   url
+                                   (:receiptHandle message)
+                                   (int visibility-timeout)))
+       (when auto-delete
+         (delete-message sqs-client url message))
+       message))))
