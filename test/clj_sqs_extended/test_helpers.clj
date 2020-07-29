@@ -1,5 +1,7 @@
 (ns clj-sqs-extended.test-helpers
-  (:import [com.amazonaws.client.builder AwsClientBuilder$EndpointConfiguration]
+  (:require [tick.alpha.api :as t])
+  (:import [java.util UUID]
+           [com.amazonaws.client.builder AwsClientBuilder$EndpointConfiguration]
            [com.amazonaws.auth
             BasicAWSCredentials
             AWSStaticCredentialsProvider]))
@@ -13,6 +15,18 @@
 (defn configure-credentials
   [access-key secret-key]
   (AWSStaticCredentialsProvider. (BasicAWSCredentials. access-key secret-key)))
+
+(defn random-bucket-name
+  []
+  (str (UUID/randomUUID)
+       "-"
+       (t/format (t/formatter "yyMMdd-hhmmss") (t/date-time))))
+
+(defn random-queue-name
+  [prefix suffix]
+  (str prefix
+       (UUID/randomUUID)
+       suffix))
 
 (defn random-string-with-length
   [length]

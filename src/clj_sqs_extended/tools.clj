@@ -1,22 +1,19 @@
 (ns clj-sqs-extended.tools
   "Provides the core functionalities of the wrapped library."
-  (:require [tick.alpha.api :as t])
-  (:import [java.util UUID]
+  (:import [com.amazonaws.services.s3 AmazonS3ClientBuilder]
+           [com.amazonaws.services.s3.model ListVersionsRequest]
            [com.amazonaws.services.s3.model
             BucketLifecycleConfiguration
             BucketLifecycleConfiguration$Rule]))
 
 
-(defn random-bucket-name
-  []
-  (str (UUID/randomUUID)
-       "-"
-       (t/format (t/formatter "yyMMdd-hhmmss") (t/date-time))))
-
-(defn random-queue-name
-  []
-  (str "queue-"
-       (UUID/randomUUID)))
+(defn s3-client
+  [endpoint credentials]
+  (let [builder (-> (AmazonS3ClientBuilder/standard)
+                    (.withPathStyleAccessEnabled true))
+        builder (if endpoint (.withEndpointConfiguration builder endpoint) builder)
+        builder (if credentials (.withCredentials builder credentials) builder)]
+    (.build builder)))
 
 (defn configure-bucket-lifecycle
   [status expiration-days]
@@ -24,3 +21,33 @@
                        (.withStatus status)
                        (.withExpirationInDays expiration-days))]
     (.withRules (BucketLifecycleConfiguration.) [expiration])))
+
+(defn create-bucket
+  ([s3-client name]
+   (create-bucket s3-client name (configure-bucket-lifecycle "Enabled" 14)))
+  ([s3-client name lifecycle]
+   (doto s3-client
+     (.createBucket name)
+     (.setBucketLifecycleConfiguration name lifecycle))
+   name))
+
+(defn purge-bucket
+  [s3-client bucket-name]
+  (letfn [(delete-objects [objects]
+            (doseq [o objects]
+              (let [key (.getKey o)]
+                (.deleteObject s3-client bucket-name key))))
+          (delete-object-versions [versions]
+            (doseq [v versions]
+              (let [key (.getKey v)
+                    id (.getVersionId v)]
+                (.deleteVersion s3-client bucket-name key id))))]
+    (loop [objects (.listObjects s3-client bucket-name)]
+      (delete-objects (.getObjectSummaries objects))
+      (when (.isTruncated objects)
+        (recur (.listNextBatchOfObjects objects))))
+    (let [version-request (-> (ListVersionsRequest.) (.withBucketName bucket-name))
+          versions (->> (.listVersions s3-client version-request) (.getVersionSummaries))]
+      (delete-object-versions versions))
+    (.deleteBucket s3-client bucket-name)))
+
