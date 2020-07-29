@@ -1,5 +1,5 @@
 (ns clj-sqs-extended.core
-  (:require [clj-sqs-extended.tools :as tools])
+  (:require [clj-sqs-extended.s3 :as s3])
   (:import [com.amazonaws.services.sqs AmazonSQSClientBuilder]
            [com.amazon.sqs.javamessaging
             AmazonSQSExtendedClient
@@ -14,7 +14,7 @@
 
 (defn ext-sqs-client
   [s3-bucket-name endpoint credentials]
-  (let [s3-client (tools/s3-client endpoint credentials)
+  (let [s3-client (s3/s3-client endpoint credentials)
         sqs-config (-> (ExtendedClientConfiguration.)
                        (.withLargePayloadSupportEnabled s3-client s3-bucket-name))
         builder (AmazonSQSClientBuilder/standard)
