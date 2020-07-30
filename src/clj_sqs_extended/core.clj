@@ -26,11 +26,11 @@
 (defn- create-queue
   ([sqs-client name]
    (create-queue sqs-client name {}))
+
   ([sqs-client name
     {:keys [fifo
             kms-master-key-id
-            kms-data-key-reuse-period]
-     :as   opts}]
+            kms-data-key-reuse-period]}]
    (let [request (CreateQueueRequest. name)]
      (when fifo
        (doto request (.addAttributesEntry
@@ -46,6 +46,7 @@
 (defn create-standard-queue
   ([sqs-client name]
    (create-queue sqs-client name {}))
+
   ([sqs-client name
     {:keys [kms-master-key-id
             kms-data-key-reuse-period]
@@ -55,6 +56,7 @@
 (defn create-fifo-queue
   ([sqs-client name]
    (create-queue sqs-client name {:fifo true}))
+
   ([sqs-client name
     {:keys [fifo
             kms-master-key-id
@@ -65,57 +67,64 @@
 
 (defn purge-queue
   [sqs-client url]
-  (let [request (PurgeQueueRequest. url)]
-    (.purgeQueue sqs-client request)))
+  (->> (PurgeQueueRequest. url)
+       (.purgeQueue sqs-client)))
 
 (defn delete-queue
   [sqs-client url]
   (.deleteQueue sqs-client url))
 
 (defn send-message
-  ([sqs-client url body]
-   (send-message sqs-client url body {}))
-  ([sqs-client url body
+  ([sqs-client url message]
+   (send-message sqs-client url message {}))
+
+  ([sqs-client url message
     {:keys [format]
-     :or   {format :transit}
-     :as   opts}]
-   (let [payload (serdes/serialize body format)]
-     (.sendMessage sqs-client url payload))))
+     :or   {format :transit}}]
+   (->> (serdes/serialize message format)
+        (.sendMessage sqs-client url))))
 
 (defn send-fifo-message
-  ([sqs-client url body group-id]
-   (send-fifo-message sqs-client url body group-id {}))
-  ([sqs-client url body group-id
+  ([sqs-client url message group-id]
+   (send-fifo-message sqs-client url message group-id {}))
+
+  ([sqs-client url message group-id
     {:keys [format]
-     :or   {format :transit}
-     :as   opts}]
-   (let [payload (serdes/serialize body format)
-         request (SendMessageRequest. url payload)]
-     ; WATCHOUT: The group ID is mandatory when sending fifo messages.
+     :or   {format :transit}}]
+   (let [request (->> (serdes/serialize message format)
+                      (SendMessageRequest. url))]
+     ;;
+     ;; WATCHOUT: The group ID is mandatory when sending fifo messages.
+     ;;
      (doto request (.setMessageGroupId group-id))
      (.sendMessage sqs-client request))))
 
 (defn delete-message
-  [sqs-client url handle]
-  (let [request (DeleteMessageRequest. url (:receiptHandle handle))]
-    (.deleteMessage sqs-client request)))
+  [sqs-client url message]
+  (->> (DeleteMessageRequest. url (:receiptHandle message))
+       (.deleteMessage sqs-client)))
 
 (defn receive-message
   ([sqs-client url]
    (receive-message sqs-client url {}))
+
   ([sqs-client url
     {:keys [format
             wait-time
             visibility-timeout
             auto-delete]
      :or   {format :transit
-            wait-time 0}
-     :as   opts}]
+            wait-time 0}}]
    (letfn [(extract-relevant-keys [message]
              (-> (bean message)
                  (select-keys [:messageId :receiptHandle :body])))]
      (let [request (doto (ReceiveMessageRequest. url)
                      (.setWaitTimeSeconds (int wait-time))
+                     ;;
+                     ;; WATCHOUT: For this library's use-case in combination with core.async
+                     ;;           channels later the number of messages returned gets hardcoded
+                     ;;           to 1 here.
+                     ;;
                      (.setMaxNumberOfMessages (int 1)))
            response (.receiveMessage sqs-client request)
            message (->> (.getMessages response) (first) (extract-relevant-keys))

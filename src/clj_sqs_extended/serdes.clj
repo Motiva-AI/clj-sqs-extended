@@ -39,7 +39,9 @@
     (= format :transit) (transit-write out)
     (= format :json) (json/generate-string out)
     (= format :raw) out
-    :else out))
+    :else (throw (ex-info "Format not supported"
+                          {:supported [:transit :json]
+                           :requested format}))))
 
 (defn deserialize
   [in format]
@@ -47,5 +49,7 @@
     (= format :transit) (transit-read in)
     (= format :json) (json/parse-string in true)
     (= format :raw) in
-    :else in))
+    :else (throw (ex-info "Format not supported"
+                          {:supported [:transit :json]
+                           :requested format}))))
 
