@@ -111,7 +111,6 @@
   ([sqs-client url
     {:keys [format
             wait-time
-            visibility-timeout
             auto-delete]
      :or   {format :transit
             wait-time 0}}]
@@ -129,11 +128,6 @@
            response (.receiveMessage sqs-client request)
            message (->> (.getMessages response) (first) (extract-relevant-keys))
            payload (serdes/deserialize (:body message) format)]
-       (when visibility-timeout
-         (.changeMessageVisibility sqs-client
-                                   url
-                                   (:receiptHandle message)
-                                   (int visibility-timeout)))
        (when auto-delete
          (delete-message sqs-client url message))
        (assoc message :body payload)))))
