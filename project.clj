@@ -7,6 +7,8 @@
 
   :dependencies [[org.clojure/clojure "1.10.1"]
                  [org.clojure/tools.logging "1.1.0"]
+                 [com.cognitect/transit-clj "1.0.324"]
+                 [cheshire "5.10.0"]
                  [tick "0.4.26-alpha"]
                  [javax.xml.bind/jaxb-api "2.3.1"]
                  [com.amazonaws/amazon-sqs-java-extended-client-lib "1.0.2"]]

@@ -1,5 +1,6 @@
 (ns clj-sqs-extended.core
-  (:require [clj-sqs-extended.s3 :as s3])
+  (:require [clj-sqs-extended.s3 :as s3]
+            [clj-sqs-extended.serdes :as serdes])
   (:import [com.amazonaws.services.sqs AmazonSQSClientBuilder]
            [com.amazon.sqs.javamessaging
             AmazonSQSExtendedClient
@@ -72,29 +73,43 @@
   (.deleteQueue sqs-client url))
 
 (defn send-message
-  [sqs-client url message]
-  (.sendMessage sqs-client url message))
+  ([sqs-client url body]
+   (send-message sqs-client url body {}))
+  ([sqs-client url body
+    {:keys [format]
+     :or   {format :transit}
+     :as   opts}]
+   (let [payload (serdes/serialize body format)]
+     (.sendMessage sqs-client url payload))))
 
 (defn send-fifo-message
-  [sqs-client url message group-id]
-  (let [request (SendMessageRequest. url message)]
-    ; WATCHOUT: The group ID is mandatory when sending fifo messages.
-    (doto request (.setMessageGroupId group-id))
-    (.sendMessage sqs-client request)))
+  ([sqs-client url body group-id]
+   (send-fifo-message sqs-client url body group-id {}))
+  ([sqs-client url body group-id
+    {:keys [format]
+     :or   {format :transit}
+     :as   opts}]
+   (let [payload (serdes/serialize body format)
+         request (SendMessageRequest. url payload)]
+     ; WATCHOUT: The group ID is mandatory when sending fifo messages.
+     (doto request (.setMessageGroupId group-id))
+     (.sendMessage sqs-client request))))
 
 (defn delete-message
-  [sqs-client url message]
-  (let [request (DeleteMessageRequest. url (:receiptHandle message))]
+  [sqs-client url handle]
+  (let [request (DeleteMessageRequest. url (:receiptHandle handle))]
     (.deleteMessage sqs-client request)))
 
 (defn receive-message
   ([sqs-client url]
    (receive-message sqs-client url {}))
   ([sqs-client url
-    {:keys [wait-time
+    {:keys [format
+            wait-time
             visibility-timeout
             auto-delete]
-     :or   {wait-time 0}
+     :or   {format :transit
+            wait-time 0}
      :as   opts}]
    (letfn [(extract-relevant-keys [message]
              (-> (bean message)
@@ -102,8 +117,9 @@
      (let [request (doto (ReceiveMessageRequest. url)
                      (.setWaitTimeSeconds (int wait-time))
                      (.setMaxNumberOfMessages (int 1)))
-           result (.receiveMessage sqs-client request)
-           message (->> (.getMessages result) (first) (extract-relevant-keys))]
+           response (.receiveMessage sqs-client request)
+           message (->> (.getMessages response) (first) (extract-relevant-keys))
+           payload (serdes/deserialize (:body message) format)]
        (when visibility-timeout
          (.changeMessageVisibility sqs-client
                                    url
@@ -111,4 +127,4 @@
                                    (int visibility-timeout)))
        (when auto-delete
          (delete-message sqs-client url message))
-       message))))
+       (assoc message :body payload)))))
