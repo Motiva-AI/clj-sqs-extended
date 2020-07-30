@@ -40,10 +40,7 @@
           test-message (rand-nth test-messages)]
       (sqs-ext/purge-queue client url)
       (sqs-ext/send-message client url test-message)
-      (let [message (sqs-ext/receive-message
-                      client
-                      url
-                      {:auto-delete true})]
+      (let [message (sqs-ext/receive-message client url {:auto-delete true})]
         (is (= test-message (:body message)))
         (is (= 0 (helpers/get-total-message-amount-in-queue client url)))))))
 
@@ -51,30 +48,25 @@
   (testing "Receiving multiple messages from FIFO queue in correct order"
     (let [client (fixtures/localstack-sqs)
           url (fixtures/test-fifo-queue-url)]
-      (doseq [format [:transit :json]]
-        (sqs-ext/purge-queue client url)
-        (doseq [message test-messages]
+      (doseq [format [:transit]]
+        (doseq [test-message test-messages]
           (sqs-ext/send-fifo-message client
                                      url
-                                     message
-                                     (helpers/random-string-with-length 5)
+                                     test-message
+                                     (helpers/random-group-id)
                                      {:format format}))
-        (let [message (sqs-ext/receive-message client url {:format format})]
-          (is (= (nth test-messages 0) (:body message))))
-        (let [message (sqs-ext/receive-message client url {:format format})]
-          (is (= (nth test-messages 1) (:body message))))
-        (let [message (sqs-ext/receive-message client url {:format format})]
-          (is (= (nth test-messages 2) (:body message))))
-        (let [message (sqs-ext/receive-message client url {:format format})]
-          (is (= (nth test-messages 3) (:body message))))
-        (let [message (sqs-ext/receive-message client url {:format format})]
-          (is (= (nth test-messages 4) (:body message))))))))
+        (doseq [test-message test-messages]
+          (let [response (sqs-ext/receive-message client url {:format format})]
+            (is (= test-message (:body response)))))))))
 
 (deftest can-send-message-larger-than-256kb
   (testing "Sending a message with more than 256kb of data (via S3 bucket) in raw format"
     (let [client (fixtures/localstack-sqs)
           url (fixtures/test-queue-url)]
-      (sqs-ext/send-message client url test-message-larger-than-256kb {:format :raw})
+      (sqs-ext/send-message client
+                            url
+                            test-message-larger-than-256kb
+                            {:format :raw})
       (let [message (sqs-ext/receive-message client url {:format :raw})
             desired-length (count test-message-larger-than-256kb)
             response-length (->> (:body message) (count))]
@@ -88,8 +80,10 @@
       (doseq [format [:transit :json]]
         (sqs-ext/purge-queue client url)
         (sqs-ext/send-message client url test-message {:format format})
-        (let [message (sqs-ext/receive-message client url {:format format
-                                                           :visibility-timeout 1})]
+        (let [message (sqs-ext/receive-message client
+                                               url
+                                               {:format format
+                                                :visibility-timeout 1})]
           (is (= test-message (:body message))))
         (Thread/sleep 2000)
         (let [message (sqs-ext/receive-message client url {:format format})]
