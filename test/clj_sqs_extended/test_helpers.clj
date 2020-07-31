@@ -38,6 +38,11 @@
        (take length)
        (apply str)))
 
+(defn random-message
+  []
+  {:id (rand-int 65535)
+   :payload (random-string-with-length 512)})
+
 (defn get-total-message-amount-in-queue
   [sqs-client url]
   (let [requested-attributes ["ApproximateNumberOfMessages"

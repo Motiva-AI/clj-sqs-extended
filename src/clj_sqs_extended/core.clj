@@ -93,9 +93,7 @@
      :or   {format :transit}}]
    (let [request (->> (serdes/serialize message format)
                       (SendMessageRequest. url))]
-     ;;
      ;; WATCHOUT: The group ID is mandatory when sending fifo messages.
-     ;;
      (doto request (.setMessageGroupId group-id))
      (.sendMessage sqs-client request))))
 
@@ -119,11 +117,7 @@
                  (select-keys [:messageId :receiptHandle :body])))]
      (let [request (doto (ReceiveMessageRequest. url)
                      (.setWaitTimeSeconds (int wait-time))
-                     ;;
-                     ;; WATCHOUT: For this library's use-case in combination with core.async
-                     ;;           channels later the number of messages returned gets hardcoded
-                     ;;           to 1 here.
-                     ;;
+                     ;; WATCHOUT: This is a design choice to read one message at a time from the queue
                      (.setMaxNumberOfMessages (int 1)))
            response (.receiveMessage sqs-client request)
            message (->> (.getMessages response) (first) (extract-relevant-keys))

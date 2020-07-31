@@ -8,19 +8,10 @@
 
 (use-fixtures :once fixtures/with-localstack-environment)
 
-(def ^:private test-messages
-  [{:quote "State. You're doing it wrong."
-    :by    "Rich Hickey"}
-   {:quote "Nothing says 'Screw You!' like a DSL."
-    :by    "Stuart Halloway"}
-   {:quote "I don't care if it works on your machine! We are not shipping your machine!"
-    :by    "Vidiu Platon"}
-   {:quote "If you can't beat your computer at chess, try kickboxing."
-    :by    "Claudio E. Montero"}
-   {:quote "I would rather be without a state than without a voice."
-    :by    "Edward Snowden"}])
+(defonce ^:private test-messages
+  (into [] (take 5 (repeatedly helpers/random-message))))
 
-(def ^:private test-message-larger-than-256kb
+(defonce ^:private test-message-larger-than-256kb
   (helpers/random-string-with-length 300000))
 
 (deftest can-receive-message
@@ -33,11 +24,11 @@
         (let [message (sqs-ext/receive-message client url {:format format})]
           (is (= test-message (:body message))))))))
 
-(deftest can-auto-delete-message
+(deftest can-auto-delete-messageX
   (testing "Auto-Deleting a single message after receiving it"
     (let [client (fixtures/localstack-sqs)
           url (fixtures/test-queue-url)
-          test-message (rand-nth test-messages)]
+          test-message (first test-messages)]
       (sqs-ext/purge-queue client url)
       (sqs-ext/send-message client url test-message)
       (let [message (sqs-ext/receive-message client url {:auto-delete true})]

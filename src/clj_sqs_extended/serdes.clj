@@ -1,4 +1,6 @@
 (ns clj-sqs-extended.serdes
+  ;; WATCHOUT: Check for future upstream improvements to use directly:
+  ;;           https://github.com/henryw374/time-literals/issues/2
   (:require [cognitect.transit :as transit]
             [tick.alpha.api :as t]
             [cheshire.core :as json]
@@ -19,10 +21,7 @@
             Duration
             Year
             YearMonth]))
-;;
-;; WATCHOUT: Check for future upstream improvements to use directly:
-;;           https://github.com/henryw374/time-literals/issues/2
-;;
+
 (def ^:private time-classes
   {'period           Period
    'date             LocalDate
@@ -63,15 +62,18 @@
         reader (transit/reader in :json read-handlers)]
     (transit/read reader)))
 
+(defn- unsupported-format-exception
+  [got]
+  (ex-info (format "Only %s formats are supported. We received %s."
+                   [:transit :json] got) {}))
+
 (defn serialize
   [out format]
   (cond
     (= format :transit) (transit-write out)
     (= format :json) (json/generate-string out)
     (= format :raw) out
-    :else (throw (ex-info "Format not supported"
-                          {:supported [:transit :json]
-                           :requested format}))))
+    :else (throw (unsupported-format-exception format))))
 
 (defn deserialize
   [in format]
@@ -79,6 +81,4 @@
     (= format :transit) (transit-read in)
     (= format :json) (json/parse-string in true)
     (= format :raw) in
-    :else (throw (ex-info "Format not supported"
-                          {:supported [:transit :json]
-                           :requested format}))))
+    :else (throw (unsupported-format-exception format))))
