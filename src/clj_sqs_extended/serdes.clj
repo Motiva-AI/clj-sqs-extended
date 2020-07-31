@@ -47,7 +47,7 @@
 (def ^:private read-handlers
   {:handlers
    (into {} (for [[sym fun] time-literals.read-write/tags]
-              [(name sym) (transit/read-handler fun)]))}) ; omit "time/" for brevity
+              [(name sym) (transit/read-handler fun)]))})   ; omit "time/" for brevity
 
 (defn- transit-write
   [arg]
@@ -65,7 +65,8 @@
 (defn- unsupported-format-exception
   [got]
   (ex-info (format "Only %s formats are supported. We received %s."
-                   [:transit :json] got) {}))
+                   [:transit :json] got)
+           {:cause :unsupported-serde-format}))
 
 (defn serialize
   [out format]

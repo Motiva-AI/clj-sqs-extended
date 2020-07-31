@@ -24,7 +24,7 @@
         (let [message (sqs-ext/receive-message client url {:format format})]
           (is (= test-message (:body message))))))))
 
-(deftest can-auto-delete-messageX
+(deftest can-auto-delete-message
   (testing "Auto-Deleting a single message after receiving it"
     (let [client (fixtures/localstack-sqs)
           url (fixtures/test-queue-url)
