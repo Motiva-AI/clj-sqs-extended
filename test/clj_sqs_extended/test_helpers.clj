@@ -28,11 +28,20 @@
        (UUID/randomUUID)
        suffix))
 
+(defn random-group-id
+  []
+  (str (UUID/randomUUID)))
+
 (defn random-string-with-length
   [length]
   (->> (repeatedly #(char (+ 40 (rand 86))))
        (take length)
        (apply str)))
+
+(defn random-message
+  []
+  {:id (rand-int 65535)
+   :payload (random-string-with-length 512)})
 
 (defn get-total-message-amount-in-queue
   [sqs-client url]
