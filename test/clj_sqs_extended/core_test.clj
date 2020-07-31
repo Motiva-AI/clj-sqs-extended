@@ -31,8 +31,6 @@
   (testing "Auto-Deleting a single message after receiving it"
     (fixtures/with-standard-queue
       (let [test-message (first test-messages)]
-        (sqs-ext/purge-queue @fixtures/test-ext-sqs-client
-                             @fixtures/test-standard-queue-url)
         (sqs-ext/send-message @fixtures/test-ext-sqs-client
                               @fixtures/test-standard-queue-url
                               test-message)
