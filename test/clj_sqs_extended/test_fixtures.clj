@@ -4,37 +4,34 @@
             [clj-sqs-extended.test-helpers :as helpers]))
 
 
-(defonce test-ext-sqs-client (atom nil))
-
-(def test-standard-queue-url (atom nil))
-(def test-fifo-queue-url (atom nil))
-
 (defn wrap-standard-queue
-  [f]
+  [ext-sqs-client url f]
   (let [queue (sqs-ext/create-standard-queue
-                @test-ext-sqs-client
+                @ext-sqs-client
                 (helpers/random-queue-name "queue-" ".standard"))]
-    (reset! test-standard-queue-url (.getQueueUrl queue))
+    (reset! url (.getQueueUrl queue))
     (f)
-    (sqs-ext/delete-queue @test-ext-sqs-client @test-standard-queue-url)))
+    (sqs-ext/delete-queue @ext-sqs-client @url)))
 
-(defmacro with-standard-queue [& body]
-  `(wrap-standard-queue (fn [] ~@body)))
+(defmacro with-standard-queue
+  [ext-sqs-client url & body]
+  `(wrap-standard-queue ~ext-sqs-client ~url (fn [] ~@body)))
 
 (defn wrap-fifo-queue
-  [f]
+  [ext-sqs-client url f]
   (let [queue (sqs-ext/create-fifo-queue
-                @test-ext-sqs-client
+                @ext-sqs-client
                 (helpers/random-queue-name "queue-" ".fifo"))]
-    (reset! test-fifo-queue-url (.getQueueUrl queue))
+    (reset! url (.getQueueUrl queue))
     (f)
-    (sqs-ext/delete-queue @test-ext-sqs-client @test-fifo-queue-url)))
+    (sqs-ext/delete-queue @ext-sqs-client @url)))
 
-(defmacro with-fifo-queue [& body]
-  `(wrap-fifo-queue (fn [] ~@body)))
+(defmacro with-fifo-queue
+  [ext-sqs-client url & body]
+  `(wrap-fifo-queue ~ext-sqs-client ~url (fn [] ~@body)))
 
 (defn with-test-ext-sqs-client
-  [f]
+  [ext-sqs-client f]
   (let [bucket-name (helpers/random-bucket-name)
         localstack-endpoint (helpers/configure-endpoint
                               "http://localhost:4566"
@@ -46,9 +43,9 @@
                                 localstack-creds)
         bucket (s3/create-bucket s3-client
                                  bucket-name)]
-    (reset! test-ext-sqs-client (sqs-ext/ext-sqs-client bucket
-                                                        localstack-endpoint
-                                                        localstack-creds))
+    (reset! ext-sqs-client (sqs-ext/ext-sqs-client bucket
+                                                   localstack-endpoint
+                                                   localstack-creds))
     (f)
     (s3/purge-bucket s3-client
                      bucket-name)))
