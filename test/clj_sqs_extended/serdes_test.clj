@@ -32,16 +32,3 @@
            (serdes/deserialize
              (serdes/serialize basic-map :json)
              :json)))))
-
-(deftest roundtrip-json-with-timestamp
-  (testing "JSON roundtrip with timestamp"
-    ;;
-    ;; FIXME: This will not match because the deserialized timestamp value is a string,
-    ;;        but in the original test map used for comparison it is an #inst
-    (comment
-      (is (= timestamp-map
-             (serdes/deserialize
-               (serdes/serialize timestamp-map :json)
-               :json))))))
-
-
