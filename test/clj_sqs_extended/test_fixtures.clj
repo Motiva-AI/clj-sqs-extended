@@ -4,30 +4,38 @@
             [clj-sqs-extended.test-helpers :as helpers]))
 
 
-(defonce ^:private ext-sqs-client (atom nil))
-(defonce ^:private queue (atom nil))
-(defonce ^:private fifo-queue (atom nil))
+(defonce test-ext-sqs-client (atom nil))
 
-(defn localstack-sqs
-  "Tests should call this function to get an initialized SQS client to use for
-   calling API requests on."
-  []
-  @ext-sqs-client)
+(def test-standard-queue-url (atom nil))
+(def test-fifo-queue-url (atom nil))
 
-(defn test-queue-url
-  []
-  (.getQueueUrl @queue))
-
-(defn test-fifo-queue-url
-  []
-  (.getQueueUrl @fifo-queue))
-
-(defn with-localstack-environment
-  "Provides a complete set of S3/SQS localstack infrastructure for testing."
+(defn wrap-standard-queue
   [f]
-  (let [queue-name (helpers/random-queue-name "queue-" ".standard")
-        fifo-queue-name (helpers/random-queue-name "queue-" ".fifo")
-        bucket-name (helpers/random-bucket-name)
+  (let [queue (sqs-ext/create-standard-queue
+                @test-ext-sqs-client
+                (helpers/random-queue-name "queue-" ".standard"))]
+    (reset! test-standard-queue-url (.getQueueUrl queue))
+    (f)
+    (sqs-ext/delete-queue @test-ext-sqs-client @test-standard-queue-url)))
+
+(defmacro with-standard-queue [& body]
+  `(wrap-standard-queue (fn [] ~@body)))
+
+(defn wrap-fifo-queue
+  [f]
+  (let [queue (sqs-ext/create-fifo-queue
+                @test-ext-sqs-client
+                (helpers/random-queue-name "queue-" ".fifo"))]
+    (reset! test-fifo-queue-url (.getQueueUrl queue))
+    (f)
+    (sqs-ext/delete-queue @test-ext-sqs-client @test-fifo-queue-url)))
+
+(defmacro with-fifo-queue [& body]
+  `(wrap-fifo-queue (fn [] ~@body)))
+
+(defn with-test-ext-sqs-client
+  [f]
+  (let [bucket-name (helpers/random-bucket-name)
         localstack-endpoint (helpers/configure-endpoint
                               "http://localhost:4566"
                               "us-east-2")
@@ -38,17 +46,9 @@
                                 localstack-creds)
         bucket (s3/create-bucket s3-client
                                  bucket-name)]
-    (reset! ext-sqs-client (sqs-ext/ext-sqs-client bucket
-                                                   localstack-endpoint
-                                                   localstack-creds))
-    (reset! queue (sqs-ext/create-standard-queue @ext-sqs-client
-                                                 queue-name))
-    (reset! fifo-queue (sqs-ext/create-fifo-queue @ext-sqs-client
-                                                  fifo-queue-name))
+    (reset! test-ext-sqs-client (sqs-ext/ext-sqs-client bucket
+                                                        localstack-endpoint
+                                                        localstack-creds))
     (f)
-    (sqs-ext/delete-queue @ext-sqs-client
-                          (test-queue-url))
-    (sqs-ext/delete-queue @ext-sqs-client
-                          (test-fifo-queue-url))
     (s3/purge-bucket s3-client
                      bucket-name)))
