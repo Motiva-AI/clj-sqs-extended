@@ -15,6 +15,15 @@
 (defonce ^:private test-message-larger-than-256kb
   (helpers/random-string-with-length 300000))
 
+(deftest can-receive-message-when-idle
+  (testing "Receive empty response when no message has been send before"
+    (fixtures/with-standard-queue
+      (doseq [format [:transit :json]]
+        (let [response (sqs-ext/receive-message @fixtures/test-ext-sqs-client
+                                                @fixtures/test-standard-queue-url
+                                                {:format format})]
+          (is (= true (empty? response))))))))
+
 (deftest can-receive-message
   (testing "Sending/Receiving basic maps"
     (fixtures/with-standard-queue
