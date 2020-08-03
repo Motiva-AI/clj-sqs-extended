@@ -29,7 +29,7 @@ sqs-utils.core/handle-queue
    aws-creds - A map of the following credential keys, used for interacting with SQS:
      access-key   - AWS access key ID
      secret-key   - AWS secret access key
-     sqs-endpoint - SQS queue endpoint - usually an HTTPS based URL (Paul: this seems redundant to queue-url)
+     sqs-endpoint - SQS queue endpoint - usually an HTTPS based URL
      region       - AWS region
 
    queue-config - A map of the configuration for this queue
@@ -55,19 +55,21 @@ Send messages to a queue:
 sqs-utils.core> (doc send-message)
 -------------------------
 sqs-utils.core/send-message
-[aws-creds queue-url payload]
+[aws-creds queue-url message]
   Send a message to a standard queue.
-=> nil (Paul: could we return the message ID? or whatever ID that the library returns for the message?)
+=> Message ID as String
+
 sqs-utils.core> (doc send-fifo-message)
 -------------------------
 sqs-utils.core/send-fifo-message
-[aws-creds queue-url payload {message-group-id :message-group-id, deduplication-id :deduplication-id, :as options}]
+[aws-creds queue-url message {message-group-id :message-group-id,
+                              deduplication-id :deduplication-id,
+                              :as options}]
   Send a message to a FIFO queue.
 
   Argments:
   message-group-id - a tag that specifies the group that this message
-  belongs to. Messages belonging to the same group
-  are guaranteed FIFO
+  belongs to. Messages belonging to the same group are guaranteed FIFO.
 
   Options:
   deduplication-id -  token used for deduplication of sent messages
