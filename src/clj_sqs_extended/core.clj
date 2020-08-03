@@ -30,3 +30,4 @@
     a kill function - call the function to terminate the loop.)"
   [aws-creds queue-config handler-fn]
   (println "I don't do much yet."))
+
