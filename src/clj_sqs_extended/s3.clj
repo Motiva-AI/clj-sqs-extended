@@ -1,5 +1,4 @@
 (ns clj-sqs-extended.s3
-  "Provides the core functionalities of the wrapped library."
   (:import [com.amazonaws.services.s3 AmazonS3ClientBuilder]
            [com.amazonaws.services.s3.model ListVersionsRequest]
            [com.amazonaws.services.s3.model

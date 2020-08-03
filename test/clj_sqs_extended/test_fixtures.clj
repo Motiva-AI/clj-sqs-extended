@@ -1,10 +1,10 @@
 (ns clj-sqs-extended.test-fixtures
-  (:require [clj-sqs-extended.core :as sqs-ext]
+  (:require [clj-sqs-extended.sqs :as sqs-ext]
             [clj-sqs-extended.s3 :as s3]
             [clj-sqs-extended.test-helpers :as helpers]))
 
 
-(defonce test-ext-sqs-client (atom nil))
+(defonce test-sqs-ext-client (atom nil))
 
 (def test-standard-queue-url (atom nil))
 (def test-fifo-queue-url (atom nil))
@@ -12,11 +12,11 @@
 (defn wrap-standard-queue
   [f]
   (let [queue (sqs-ext/create-standard-queue
-                @test-ext-sqs-client
+                @test-sqs-ext-client
                 (helpers/random-queue-name "queue-" ".standard"))]
     (reset! test-standard-queue-url (.getQueueUrl queue))
     (f)
-    (sqs-ext/delete-queue @test-ext-sqs-client @test-standard-queue-url)))
+    (sqs-ext/delete-queue @test-sqs-ext-client @test-standard-queue-url)))
 
 (defmacro with-standard-queue [& body]
   `(wrap-standard-queue (fn [] ~@body)))
@@ -24,16 +24,16 @@
 (defn wrap-fifo-queue
   [f]
   (let [queue (sqs-ext/create-fifo-queue
-                @test-ext-sqs-client
+                @test-sqs-ext-client
                 (helpers/random-queue-name "queue-" ".fifo"))]
     (reset! test-fifo-queue-url (.getQueueUrl queue))
     (f)
-    (sqs-ext/delete-queue @test-ext-sqs-client @test-fifo-queue-url)))
+    (sqs-ext/delete-queue @test-sqs-ext-client @test-fifo-queue-url)))
 
 (defmacro with-fifo-queue [& body]
   `(wrap-fifo-queue (fn [] ~@body)))
 
-(defn with-test-ext-sqs-client
+(defn with-test-sqs-ext-client
   [f]
   (let [bucket-name (helpers/random-bucket-name)
         localstack-endpoint (helpers/configure-endpoint
@@ -46,7 +46,7 @@
                                 localstack-creds)
         bucket (s3/create-bucket s3-client
                                  bucket-name)]
-    (reset! test-ext-sqs-client (sqs-ext/ext-sqs-client bucket
+    (reset! test-sqs-ext-client (sqs-ext/sqs-ext-client bucket
                                                         localstack-endpoint
                                                         localstack-creds))
     (f)
