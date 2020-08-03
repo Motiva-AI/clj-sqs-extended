@@ -66,7 +66,7 @@
   [got]
   (ex-info (format "Only %s formats are supported. We received %s."
                    [:transit :json] got)
-           {:cause :unsupported-serde-format}))
+           {:cause :unsupported-serdes-format}))
 
 (defn serialize
   [out format]

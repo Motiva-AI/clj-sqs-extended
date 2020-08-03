@@ -1,12 +1,11 @@
 (ns clj-sqs-extended.serdes-test
   (:require [clojure.test :refer [deftest is testing]]
             [clj-sqs-extended.serdes :as serdes]
+            [clj-sqs-extended.test-helpers :as helpers]
             [tick.alpha.api :as t]))
 
 
-(def ^:private basic-map
-  {:quote "State. You're doing it wrong."
-   :by    "Rich Hickey"})
+(def ^:private basic-map (helpers/random-message))
 
 (def ^:private timestamp-map
   {:step      1

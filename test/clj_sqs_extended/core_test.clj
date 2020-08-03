@@ -1,6 +1,7 @@
 (ns clj-sqs-extended.core-test
   "Basic tests for the primary API of `clj-extended-sqs`."
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
+            [clojure.tools.logging :as log]
             [clj-sqs-extended.core :as sqs-ext]
             [clj-sqs-extended.test-helpers :as helpers]
             [clj-sqs-extended.test-fixtures :as fixtures]))
@@ -19,9 +20,10 @@
     (fixtures/with-standard-queue
       (let [test-message (first test-messages)]
         (doseq [format [:transit :json]]
-          (sqs-ext/send-message @fixtures/test-ext-sqs-client
-                                @fixtures/test-standard-queue-url
-                                test-message {:format format})
+          (log/infof "Message sent. ID: '%s'"
+                      (sqs-ext/send-message @fixtures/test-ext-sqs-client
+                                            @fixtures/test-standard-queue-url
+                                            test-message {:format format}))
           (let [response (sqs-ext/receive-message @fixtures/test-ext-sqs-client
                                                   @fixtures/test-standard-queue-url
                                                   {:format format})]
