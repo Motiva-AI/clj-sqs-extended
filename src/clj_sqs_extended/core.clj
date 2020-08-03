@@ -91,12 +91,16 @@
    (send-fifo-message sqs-client url message group-id {}))
 
   ([sqs-client url message group-id
-    {:keys [format]
+    {:keys [format
+            deduplication-id]
      :or   {format :transit}}]
    (let [request (->> (serdes/serialize message format)
                       (SendMessageRequest. url))]
      ;; WATCHOUT: The group ID is mandatory when sending fifo messages.
      (doto request (.setMessageGroupId group-id))
+     (when deduplication-id
+       ;; WATCHOUT: Refer to https://docs.aws.amazon.com/AWSJavaSDK/latest/javadoc/com/amazonaws/services/sqs/model/SendMessageRequest.html#setMessageDeduplicationId-java.lang.String-
+       (doto request (.setMessageDeduplicationId deduplication-id)))
      (.sendMessage sqs-client request))))
 
 (defn delete-message
