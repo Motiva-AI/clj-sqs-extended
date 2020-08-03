@@ -82,7 +82,9 @@
     {:keys [format]
      :or   {format :transit}}]
    (->> (serdes/serialize message format)
-        (.sendMessage sqs-client url))))
+        (SendMessageRequest. url)
+        (.sendMessage sqs-client)
+        (.getMessageId))))
 
 (defn send-fifo-message
   ([sqs-client url message group-id]
