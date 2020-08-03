@@ -119,15 +119,18 @@
      :or   {format :transit
             wait-time 0}}]
    (letfn [(extract-relevant-keys [message]
-             (-> (bean message)
-                 (select-keys [:messageId :receiptHandle :body])))]
+             (if message
+               (-> (bean message)
+                   (select-keys [:messageId :receiptHandle :body]))
+               {}))]
      (let [request (doto (ReceiveMessageRequest. url)
                      (.setWaitTimeSeconds (int wait-time))
                      ;; WATCHOUT: This is a design choice to read one message at a time from the queue
                      (.setMaxNumberOfMessages (int 1)))
            response (.receiveMessage sqs-client request)
-           message (->> (.getMessages response) (first) (extract-relevant-keys))
-           payload (serdes/deserialize (:body message) format)]
+           message (->> (.getMessages response) (first) (extract-relevant-keys))]
        (when auto-delete
          (delete-message sqs-client url message))
-       (assoc message :body payload)))))
+       (if-let [payload (serdes/deserialize (:body message) format)]
+         (assoc message :body payload)
+         message)))))

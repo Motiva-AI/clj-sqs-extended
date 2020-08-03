@@ -58,9 +58,10 @@
 
 (defn- transit-read
   [json]
-  (let [in (ByteArrayInputStream. (.getBytes json))
-        reader (transit/reader in :json read-handlers)]
-    (transit/read reader)))
+  (when json
+    (let [in (ByteArrayInputStream. (.getBytes json))
+          reader (transit/reader in :json read-handlers)]
+      (transit/read reader))))
 
 (defn- unsupported-format-exception
   [got]
