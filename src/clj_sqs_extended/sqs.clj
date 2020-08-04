@@ -77,7 +77,6 @@
 (defn send-message
   ([sqs-client url message]
    (send-message sqs-client url message {}))
-
   ([sqs-client url message
     {:keys [format]
      :or   {format :transit}}]

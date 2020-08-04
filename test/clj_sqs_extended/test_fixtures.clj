@@ -52,3 +52,6 @@
     (f)
     (s3/purge-bucket s3-client
                      bucket-name)))
+
+(defmacro with-sqs-ext-client [& body]
+  `(with-test-sqs-ext-client (fn [] ~@body)))
