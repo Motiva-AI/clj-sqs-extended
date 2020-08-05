@@ -8,8 +8,12 @@
   (:import (java.util.concurrent CountDownLatch)))
 
 
-(defn- create-client
-  []
+(defonce sqs-ext-client (atom nil))
+(defonce queue-url (atom nil))
+
+; TODO: This needs to moved somewhere else.
+(defn wrap-sqs-ext-client
+  [f]
   (let [bucket-name (helpers/random-bucket-name)
         localstack-endpoint (helpers/configure-endpoint
                               "http://localhost:4566"
@@ -20,28 +24,31 @@
         s3-client (s3/s3-client localstack-endpoint
                                 localstack-creds)
         bucket (s3/create-bucket s3-client
-                                 bucket-name)
-        sqs-client (sqs-ext/sqs-ext-client bucket
-                                           localstack-endpoint
-                                           localstack-creds)
-        queue (sqs-ext/create-standard-queue sqs-client
-                                             (helpers/random-queue-name "queue-" ".standard"))]
-    [sqs-client (.getQueueUrl queue)]))
+                                 bucket-name)]
+    (reset! sqs-ext-client (sqs-ext/sqs-ext-client bucket
+                                                   localstack-endpoint
+                                                   localstack-creds))
+    (let [queue (sqs-ext/create-standard-queue
+                  @sqs-ext-client
+                  (helpers/random-queue-name "queue-" ".standard"))]
+      (reset! queue-url (.getQueueUrl queue))
+      (f))))
 
-(def the-client (create-client))
+(defmacro with-sqs-ext-client [& body]
+  `(wrap-sqs-ext-client (fn [] ~@body)))
 
 (defn dispatch-action-service
   ([message]
-   (log/infof "I got %s" (get-in message [:body :foo])))
+   (log/infof "I got %s" (:body message)))
   ([message done-fn]
-   (log/infof "I got %s" (get-in message [:body :foo]))
+   (log/infof "I got %s" (:body message))
    (done-fn)))
 
 (defn start-action-service-queue-listener
   []
   (sqs-utils/handle-queue
-    (first the-client)
-    (last the-client)
+    @sqs-ext-client
+    @queue-url
     dispatch-action-service))
 
 (defn start-queue-listeners
@@ -58,7 +65,8 @@
     (start-queue-listeners)
     (.await sigterm)))
 
-(future (start-worker))
-
-(comment
-  (sqs-ext/send-message (first the-client) (last the-client) {:foo "potatoes"}))
+(with-sqs-ext-client
+  (future (start-worker))
+  (dotimes [_ 10]
+    (sqs-ext/send-message @sqs-ext-client @queue-url {:foo (helpers/random-string-with-length 10)})
+    (Thread/sleep 1000)))
