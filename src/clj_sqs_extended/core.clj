@@ -15,9 +15,7 @@
             restart-delay-seconds]
      :or   {auto-delete           true
             restart-delay-seconds 1}}]
-   (let [receive-to-chan #(sqs-ext/receive-message sqs-client queue-url)
-         loop-state (atom {:in-chan #(receive-to-chan)
-                           :running true
+   (let [loop-state (atom {:running true
                            :stats   {:count         0
                                      :started-at    (t/now)
                                      :restart-count 0
@@ -26,21 +24,17 @@
      (letfn [(restart-loop
                []
                (log/infof "Restarting receive-loop for %s" queue-url)
-               (let [in-chan (:in-chan @loop-state)]
-                 (swap! loop-state
-                        (fn [state]
-                          (-> state
-                              (assoc :in-chan #(receive-to-chan))
-                              (update-in [:stats :restart-count] inc)
-                              (assoc-in [:stats :restarted-at] (t/now)))))
-                 (async/close! in-chan)))
+               (swap! loop-state
+                      (fn [state]
+                        (-> state
+                            (update-in [:stats :restart-count] inc)
+                            (assoc-in [:stats :restarted-at] (t/now))))))
 
              (stop-loop
                []
                (when (:running @loop-state)
                  (log/infof "Terminating receive-loop for %s" queue-url)
                  (swap! loop-state assoc :running false)
-                 (async/close! (:in-chan @loop-state))
                  (async/close! out-chan))
                (:stats @loop-state))
 
@@ -61,8 +55,7 @@
          (swap! loop-state update-stats)
 
          (try
-           ;; TODO: There is still something wrong here, this shouldn't be (())!
-           (let [{:keys [body receiptHandle] :as message} ((:in-chan @loop-state))]
+           (let [{:keys [body] :as message} (sqs-ext/receive-message sqs-client queue-url)]
              (cond
                (nil? message)
                (stop-loop)
@@ -76,17 +69,15 @@
                  (<! (async/timeout (int (* restart-delay-seconds 1000))))
                  (restart-loop))
 
-               :else
-               ;; TODO: Look for a better way to skip empty messages.
-               (when-not (empty? message)
-                 (let [done-fn #(sqs-ext/delete-message sqs-client queue-url message)
-                       msg (cond-> message
-                                   (not auto-delete) (assoc :done-fn done-fn))]
-                   (if body
-                     (>! out-chan msg)
-                     (log/warnf "Queue %s received a nil body message: %s" queue-url message))
-                   (when auto-delete
-                     (done-fn))))))
+               (not (empty? message))
+               (let [done-fn #(sqs-ext/delete-message sqs-client queue-url message)
+                     msg (cond-> message
+                                 (not auto-delete) (assoc :done-fn done-fn))]
+                 (if body
+                   (>! out-chan msg)
+                   (log/warnf "Queue %s received a nil body message: %s" queue-url message))
+                 (when auto-delete
+                   (done-fn)))))
 
            (catch Exception e
              (log/errorf e "Failed receiving message for %s" (:stats @loop-state))))

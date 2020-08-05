@@ -62,12 +62,15 @@
   []
   (let [sigterm (CountDownLatch. 1)]
     (log/info "Starting queue workers...")
-    (start-queue-listeners)
-    (.await sigterm)))
+    (let [stop-listeners (start-queue-listeners)]
+      ;; (Thread/sleep 5000)
+      ;; (stop-listeners)
+      (.await sigterm))))
 
 (with-sqs-ext-client
   (future (start-worker))
   (dotimes [_ 10]
     (log/infof "Message with ID '%s' sent."
-               (sqs-ext/send-message @sqs-ext-client @queue-url {:foo (helpers/random-string-with-length 10)}))
-    (Thread/sleep 1000)))
+               (sqs-ext/send-message @sqs-ext-client
+                                     @queue-url
+                                     (helpers/random-message)))))
