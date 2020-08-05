@@ -1,6 +1,7 @@
 (ns clj-sqs-extended.sqs
   (:require [clj-sqs-extended.s3 :as s3]
-            [clj-sqs-extended.serdes :as serdes])
+            [clj-sqs-extended.serdes :as serdes]
+            [clojure.tools.logging :as log])
   (:import [com.amazonaws.services.sqs AmazonSQSClientBuilder]
            [com.amazon.sqs.javamessaging
             AmazonSQSExtendedClient
@@ -115,7 +116,7 @@
     {:keys [format
             wait-time
             auto-delete]
-     :or   {format :transit
+     :or   {format    :transit
             wait-time 0}}]
    (letfn [(extract-relevant-keys [message]
              (if message

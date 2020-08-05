@@ -15,32 +15,32 @@
             restart-delay-seconds]
      :or   {auto-delete           true
             restart-delay-seconds 1}}]
-   (let [receive-from-chan #(sqs-ext/receive-message sqs-client queue-url)
-         loop-state (atom {:messages (receive-from-chan)
-                           :running  true
-                           :stats    {:count         0
-                                      :started-at    (t/now)
-                                      :restart-count 0
-                                      :restarted-at  nil
-                                      :queue-url     queue-url}})]
+   (let [receive-to-chan #(sqs-ext/receive-message sqs-client queue-url)
+         loop-state (atom {:in-chan #(receive-to-chan)
+                           :running true
+                           :stats   {:count         0
+                                     :started-at    (t/now)
+                                     :restart-count 0
+                                     :restarted-at  nil
+                                     :queue-url     queue-url}})]
      (letfn [(restart-loop
                []
                (log/infof "Restarting receive-loop for %s" queue-url)
-               (let [messages-chan (:messages @loop-state)]
+               (let [in-chan (:in-chan @loop-state)]
                  (swap! loop-state
                         (fn [state]
                           (-> state
-                              (dissoc :messages)
+                              (assoc :in-chan #(receive-to-chan))
                               (update-in [:stats :restart-count] inc)
                               (assoc-in [:stats :restarted-at] (t/now)))))
-                 (async/close! messages-chan)))
+                 (async/close! in-chan)))
 
              (stop-loop
                []
                (when (:running @loop-state)
                  (log/infof "Terminating receive-loop for %s" queue-url)
                  (swap! loop-state assoc :running false)
-                 (async/close! (:messages @loop-state))
+                 (async/close! (:in-chan @loop-state))
                  (async/close! out-chan))
                (:stats @loop-state))
 
@@ -48,22 +48,21 @@
                [d1 d2]
                (t/seconds (t/between d1 d2)))
 
-             (update-loop-state
+             (update-stats
                [state]
-               (let [{:keys [started-at]} (:stats state)
-                     now (t/now)]
+               (let [now (t/now)]
                  (-> state
-                     (assoc :messages (receive-from-chan))
                      (update-in [:stats :count] inc)
                      (assoc-in [:stats :this-pass-started-at] now)
                      (assoc-in [:stats :loop-duration]
                                (secs-between (-> state :stats :started-at) now)))))]
 
        (go-loop []
-         (swap! loop-state update-loop-state)
+         (swap! loop-state update-stats)
 
          (try
-           (let [message (:messages @loop-state)]
+           ;; TODO: There is still something wrong here, this shouldn't be (())!
+           (let [{:keys [body receiptHandle] :as message} ((:in-chan @loop-state))]
              (cond
                (nil? message)
                (stop-loop)
@@ -78,11 +77,16 @@
                  (restart-loop))
 
                :else
+               ;; TODO: Look for a better way to skip empty messages.
                (when-not (empty? message)
-                 (>! out-chan message)
-                 (when auto-delete
-                   ;; FIXME: Assign :done-fn to be processed outside afterwards.
-                   (sqs-ext/delete-message sqs-client queue-url message)))))
+                 (let [done-fn #(sqs-ext/delete-message sqs-client queue-url message)
+                       msg (cond-> message
+                                   (not auto-delete) (assoc :done-fn done-fn))]
+                   (if body
+                     (>! out-chan msg)
+                     (log/warnf "Queue %s received a nil body message: %s" queue-url message))
+                   (when auto-delete
+                     (done-fn))))))
 
            (catch Exception e
              (log/errorf e "Failed receiving message for %s" (:stats @loop-state))))

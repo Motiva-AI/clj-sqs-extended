@@ -8,10 +8,10 @@
   (:import (java.util.concurrent CountDownLatch)))
 
 
+; TODO: This needs to moved somewhere (handle-queue?!) else!
 (defonce sqs-ext-client (atom nil))
 (defonce queue-url (atom nil))
 
-; TODO: This needs to moved somewhere else.
 (defn wrap-sqs-ext-client
   [f]
   (let [bucket-name (helpers/random-bucket-name)
@@ -39,10 +39,10 @@
 
 (defn dispatch-action-service
   ([message]
-   (log/infof "I got %s" (:body message)))
+   (log/infof "I got %s which was auto-deleted." (:body message)))
   ([message done-fn]
-   (log/infof "I got %s" (:body message))
-   (done-fn)))
+   (done-fn)
+   (log/infof "I got %s which I just deleted myself." (:body message))))
 
 (defn start-action-service-queue-listener
   []
@@ -53,9 +53,9 @@
 
 (defn start-queue-listeners
   []
-  (let [start-fns [(start-action-service-queue-listener)]]
+  (let [stop-fns [(start-action-service-queue-listener)]]
     (fn []
-      (doseq [f start-fns]
+      (doseq [f stop-fns]
         (f)))))
 
 (defn start-worker
@@ -68,5 +68,6 @@
 (with-sqs-ext-client
   (future (start-worker))
   (dotimes [_ 10]
-    (sqs-ext/send-message @sqs-ext-client @queue-url {:foo (helpers/random-string-with-length 10)})
+    (log/infof "Message with ID '%s' sent."
+               (sqs-ext/send-message @sqs-ext-client @queue-url {:foo (helpers/random-string-with-length 10)}))
     (Thread/sleep 1000)))
