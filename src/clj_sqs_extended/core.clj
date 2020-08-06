@@ -8,15 +8,17 @@
 
 
 (defn receive-loop
-  ([sqs-ext-client queue-url out-chan]
-   (receive-loop sqs-ext-client queue-url out-chan {}))
+  ([sqs-ext-client queue-name out-chan]
+   (receive-loop sqs-ext-client queue-name out-chan {}))
 
-  ([sqs-ext-client queue-url out-chan
+  ([sqs-ext-client queue-name out-chan
     {:keys [auto-delete
             restart-delay-seconds]
      :or   {auto-delete           true
             restart-delay-seconds 1}}]
-   (let [loop-state (atom {:running true
+   (let [queue-url (sqs-ext/queue-name-to-url sqs-ext-client
+                                              queue-name)
+         loop-state (atom {:running true
                            :stats   {:count         0
                                      :started-at    (t/now)
                                      :restart-count 0
@@ -56,8 +58,8 @@
          (swap! loop-state update-stats)
 
          (try
-           ;; TODO: Taking out messages from the queue isn't channeled anymore. Should it (still) be?!
-           (let [{:keys [body] :as message} (sqs-ext/receive-message sqs-ext-client queue-url)]
+           ;; TODO: https://github.com/Motiva-AI/clj-sqs-extended/issues/22
+           (let [{:keys [body] :as message} (sqs-ext/receive-message sqs-ext-client queue-name)]
              (cond
                (nil? message)
                (stop-loop)
@@ -72,12 +74,12 @@
                  (restart-loop))
 
                (not (empty? message))
-               (let [done-fn #(sqs-ext/delete-message sqs-ext-client queue-url message)
+               (let [done-fn #(sqs-ext/delete-message sqs-ext-client queue-name message)
                      msg (cond-> message
                                  (not auto-delete) (assoc :done-fn done-fn))]
                  (if body
                    (>! out-chan msg)
-                   (log/warnf "Queue %s received a nil body message: %s" queue-url message))
+                   (log/warnf "Queue '%s' received a nil body message: %s" queue-name message))
                  (when auto-delete
                    (done-fn)))))
 
@@ -92,42 +94,45 @@
 
 
 (defn handle-queue
-  ([queue-url handler-fn]
-   (handle-queue queue-url handler-fn {}))
-  ([queue-url handler-fn
-    {:keys [num-handler-threads
-            auto-delete
-            bucket-name]
-     :or   {num-handler-threads 4
-            auto-delete         true}}]
-
-   (let [endpoint (aws/configure-endpoint
-                    {:url    "http://localhost:4566"
-                     :region "us-east-2"})
-         creds (aws/configure-credentials
-                 {:access-key "localstack"
-                  :secret-key "localstack"})
-         sqs-ext-client (sqs-ext/sqs-ext-client bucket-name
+  ([{:keys [access-key
+            secret-key
+            endpoint-url
+            region]
+     :or   {access-key   "default"
+            secret-key   "default"
+            endpoint-url "http://localhost:4566"
+            region       "us-east-2"}
+     :as   aws-creds}
+     {:keys [queue-name
+             s3-bucket-name
+             num-handler-threads
+             auto-delete]
+      :or   {num-handler-threads 4
+             auto-delete         true}}
+           handler-fn]
+   (let [endpoint (aws/configure-endpoint aws-creds)
+         creds (aws/configure-credentials aws-creds)
+         sqs-ext-client (sqs-ext/sqs-ext-client s3-bucket-name
                                                 endpoint
-                                                creds)]
-     (log/infof (str "Starting receive loop for %s with:\n"
-                     "  num-handler-threads: %d\n"
-                     "  auto-delete: %s")
-                queue-url num-handler-threads auto-delete)
-     (let [receive-chan (chan)
-           stop-fn (receive-loop sqs-ext-client
-                                 queue-url
-                                 receive-chan
-                                 {:auto-delete auto-delete})]
-       (dotimes [_ num-handler-threads]
-         (thread
-           (loop []
-             (when-let [message (<!! receive-chan)]
-               (try
-                 (if auto-delete
-                   (handler-fn message)
-                   (handler-fn message (:done-fn message)))
-                 (catch Throwable t
-                   (log/error t "SQS handler function threw an error.")))
-               (recur)))))
-       stop-fn))))
+                                                creds)
+         receive-chan (chan)
+         stop-fn (receive-loop sqs-ext-client
+                               queue-name
+                               receive-chan
+                               {:auto-delete auto-delete})]
+     ((log/infof (str "Starting receive loop for queue '%s' with:\n"
+                      "  num-handler-threads: %d\n"
+                      "  auto-delete: %s")
+                 queue-name num-handler-threads auto-delete)
+      (dotimes [_ num-handler-threads]
+        (thread
+          (loop []
+            (when-let [message (<!! receive-chan)]
+              (try
+                (if auto-delete
+                  (handler-fn message)
+                  (handler-fn message (:done-fn message)))
+                (catch Throwable t
+                  (log/error t "SQS handler function threw an error.")))
+              (recur)))))
+      stop-fn))))

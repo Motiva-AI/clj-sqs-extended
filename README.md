@@ -26,15 +26,15 @@ sqs-utils.core/handle-queue
 
    Arguments:
 
-   aws-creds - A map of the following credential keys, used for interacting with SQS:
+   aws-config - A map of the following settings used for interacting with AWS SQS:
      access-key   - AWS access key ID
      secret-key   - AWS secret access key
-     sqs-endpoint - SQS queue endpoint - usually an HTTPS based URL
+     endpoint-url - AWS endpoint (usually an HTTPS based URL)
      region       - AWS region
 
    queue-config - A map of the configuration for this queue
-     queue-url     - required: URL of the queue
-     s3-bucket-arn - optional: ARN (or whatever URI needed to point to an existing S3, TBD what minimal setting we need to pass in here)
+     queue-name     - required: name of the queue
+     s3-bucket-name - required: name of an existing S3 bucket)
      num-handler-threads - optional: how many threads to run (defaults: 4)
      auto-delete   - optional: boolean, if true, immediately delete the message,
                      if false, forward a `done` function and leave the
@@ -55,16 +55,17 @@ Send messages to a queue:
 sqs-utils.core> (doc send-message)
 -------------------------
 sqs-utils.core/send-message
-[aws-creds queue-url message]
+[sqs-client queue-name message]
   Send a message to a standard queue.
 => Message ID as String
 
 sqs-utils.core> (doc send-fifo-message)
 -------------------------
 sqs-utils.core/send-fifo-message
-[aws-creds queue-url message {message-group-id :message-group-id,
-                              deduplication-id :deduplication-id,
-                              :as options}]
+[sqs-client queue-name message group-id
+  {:keys [format
+          deduplication-id]
+   :or   {format :transit}}]
   Send a message to a FIFO queue.
 
   Argments:
@@ -72,7 +73,8 @@ sqs-utils.core/send-fifo-message
   belongs to. Messages belonging to the same group are guaranteed FIFO.
 
   Options:
-  deduplication-id -  token used for deduplication of sent messages
+  format - format to serialize outgoing message with (:json :transit)
+  deduplication-id - token used for deduplication of sent messages
 => nil
 ```
 

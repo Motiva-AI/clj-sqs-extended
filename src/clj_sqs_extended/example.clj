@@ -8,27 +8,33 @@
   (:import (java.util.concurrent CountDownLatch)))
 
 
-(def ^:private bucket-name "sqs-ext-bucket")
-(def ^:private queue-name "sqs-ext-queue")
+(def ^:private aws-config {:access-key   "default"
+                           :secret-key   "default"
+                           :endpoint-url "http://localhost:4566"
+                           :region       "us-east-2"})
+
+(def ^:private queue-config {:queue-name          "sqs-ext-queue"
+                             :s3-bucket-name      "sqs-ext-bucket"
+                             :num-handler-threads 1
+                             :auto-delete         true})
 
 (def ^:private sqs-ext-client
-  (sqs/sqs-ext-client bucket-name
-                      (aws/configure-endpoint)
-                      (aws/configure-credentials)))
+  (sqs/sqs-ext-client (:s3-bucket-name queue-config)
+                      (aws/configure-endpoint aws-config)
+                      (aws/configure-credentials aws-config)))
 
 (defn- dispatch-action-service
   ([message]
-   (log/infof "I got %s which was auto-deleted." (:body message)))
+   (log/infof "I got %s." (:body message)))
   ([message done-fn]
    (done-fn)
-   (log/infof "I got %s which I just deleted myself." (:body message))))
+   (log/infof "I got %s." (:body message))))
 
 (defn- start-action-service-queue-listener
   []
-  (sqs-ext/handle-queue
-    queue-name
-    dispatch-action-service
-    {:bucket-name bucket-name}))
+  (sqs-ext/handle-queue aws-config
+                        queue-config
+                        dispatch-action-service))
 
 (defn- start-queue-listeners
   []
@@ -47,13 +53,17 @@
 
 (defn- run-example
   []
-  (s3/create-bucket (s3/s3-client) bucket-name)
-  (sqs/create-standard-queue sqs-ext-client queue-name)
+  (s3/create-bucket (s3/s3-client)
+                    (:s3-bucket-name queue-config))
+  (sqs/create-standard-queue sqs-ext-client
+                             (:s3-bucket-name queue-config))
   (future (start-worker))
-  (log/infof "Message with ID '%s' sent."
-             (sqs/send-message sqs-ext-client
-                               queue-name
-                               {:foo "potatoes"})))
+  (let [message {:foo "potatoes"}]
+    (log/infof "I sent %s with ID '%s'."
+               message
+               (sqs/send-message sqs-ext-client
+                                 (:queue-name queue-config)
+                                 message))))
 
 (comment
   (run-example))

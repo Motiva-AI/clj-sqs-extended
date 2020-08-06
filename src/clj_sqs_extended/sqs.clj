@@ -13,6 +13,7 @@
 
 
 (defn sqs-ext-client
+  ;; XXXFI: This shall build an extended client, therefore the bucket is mandatory.
   [s3-bucket-name endpoint creds]
   (let [s3-client (s3/s3-client endpoint creds)
         sqs-config (-> (ExtendedClientConfiguration.)

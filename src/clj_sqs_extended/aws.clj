@@ -14,11 +14,11 @@
   ([]
    (configure-endpoint {}))
 
-  ([{:keys [url
+  ([{:keys [endpoint-url
             region]
-     :or   {url    "http://localhost:4566"
-            region "us-east-2"}}]
-   (AwsClientBuilder$EndpointConfiguration. url region)))
+     :or   {endpoint-url "http://localhost:4566"
+            region       "us-east-2"}}]
+   (AwsClientBuilder$EndpointConfiguration. endpoint-url region)))
 
 (defn configure-credentials
   "Creates basic credentials for the passed keys.

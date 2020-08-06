@@ -1,7 +1,7 @@
 (ns clj-sqs-extended.test-fixtures
   (:require [clj-sqs-extended.sqs :as sqs-ext]
+            [clj-sqs-extended.aws :as aws]
             [clj-sqs-extended.s3 :as s3]
-            [clj-sqs-extended.utils :as utils]
             [clj-sqs-extended.test-helpers :as helpers]))
 
 
@@ -33,8 +33,8 @@
 
 (defn with-test-sqs-ext-client
   [f]
-  (let [localstack-endpoint (utils/configure-endpoint)
-        localstack-creds (utils/configure-credentials)
+  (let [localstack-endpoint (aws/configure-endpoint)
+        localstack-creds (aws/configure-credentials)
         s3-client (s3/s3-client localstack-endpoint
                                 localstack-creds)
         bucket-name (s3/create-bucket s3-client
