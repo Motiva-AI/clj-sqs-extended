@@ -56,7 +56,7 @@
   (s3/create-bucket (s3/s3-client)
                     (:s3-bucket-name queue-config))
   (sqs/create-standard-queue sqs-ext-client
-                             (:s3-bucket-name queue-config))
+                             (:queue-name queue-config))
   (future (start-worker))
   (let [message {:foo "potatoes"}]
     (log/infof "I sent %s with ID '%s'."

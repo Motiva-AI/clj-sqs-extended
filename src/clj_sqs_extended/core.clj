@@ -103,13 +103,13 @@
             endpoint-url "http://localhost:4566"
             region       "us-east-2"}
      :as   aws-creds}
-     {:keys [queue-name
-             s3-bucket-name
-             num-handler-threads
-             auto-delete]
-      :or   {num-handler-threads 4
-             auto-delete         true}}
-           handler-fn]
+    {:keys [queue-name
+            s3-bucket-name
+            num-handler-threads
+            auto-delete]
+     :or   {num-handler-threads 4
+            auto-delete         true}}
+    handler-fn]
    (let [endpoint (aws/configure-endpoint aws-creds)
          creds (aws/configure-credentials aws-creds)
          sqs-ext-client (sqs-ext/sqs-ext-client s3-bucket-name
