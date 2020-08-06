@@ -1,4 +1,4 @@
-(ns clj-sqs-extended.utils
+(ns clj-sqs-extended.aws
   (:import [com.amazonaws.client.builder
             AwsClientBuilder$EndpointConfiguration]
            [com.amazonaws.auth

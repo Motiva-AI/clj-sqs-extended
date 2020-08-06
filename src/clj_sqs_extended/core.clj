@@ -1,6 +1,6 @@
 (ns clj-sqs-extended.core
   (:require [clj-sqs-extended.sqs :as sqs-ext]
-            [clj-sqs-extended.utils :as utils]
+            [clj-sqs-extended.aws :as aws]
             [clojure.core.async :as async
              :refer [chan go-loop <! >! <!! >!! thread]]
             [tick.alpha.api :as t]
@@ -101,10 +101,10 @@
      :or   {num-handler-threads 4
             auto-delete         true}}]
 
-   (let [endpoint (utils/configure-endpoint
+   (let [endpoint (aws/configure-endpoint
                     {:url    "http://localhost:4566"
                      :region "us-east-2"})
-         creds (utils/configure-credentials
+         creds (aws/configure-credentials
                  {:access-key "localstack"
                   :secret-key "localstack"})
          sqs-ext-client (sqs-ext/sqs-ext-client bucket-name

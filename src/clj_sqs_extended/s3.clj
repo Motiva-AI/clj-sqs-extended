@@ -1,5 +1,5 @@
 (ns clj-sqs-extended.s3
-  (:require [clj-sqs-extended.utils :as utils])
+  (:require [clj-sqs-extended.aws :as aws])
   (:import [com.amazonaws.services.s3 AmazonS3ClientBuilder]
            [com.amazonaws.services.s3.model ListVersionsRequest]
            [com.amazonaws.services.s3.model
@@ -9,7 +9,7 @@
 
 (defn s3-client
   ([]
-   (s3-client (utils/configure-endpoint) (utils/configure-credentials)))
+   (s3-client (aws/configure-endpoint) (aws/configure-credentials)))
   ([endpoint creds]
    (let [builder (-> (AmazonS3ClientBuilder/standard)
                      (.withPathStyleAccessEnabled true))

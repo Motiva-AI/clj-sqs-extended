@@ -2,9 +2,9 @@
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.tools.logging :as log]
             [clj-sqs-extended.core :as sqs-ext]
+            [clj-sqs-extended.aws :as aws]
             [clj-sqs-extended.sqs :as sqs]
-            [clj-sqs-extended.s3 :as s3]
-            [clj-sqs-extended.utils :as sqs-utils])
+            [clj-sqs-extended.s3 :as s3])
   (:import (java.util.concurrent CountDownLatch)))
 
 
@@ -13,8 +13,8 @@
 
 (def ^:private sqs-ext-client
   (sqs/sqs-ext-client bucket-name
-                      (sqs-utils/configure-endpoint)
-                      (sqs-utils/configure-credentials)))
+                      (aws/configure-endpoint)
+                      (aws/configure-credentials)))
 
 (defn- dispatch-action-service
   ([message]
