@@ -11,8 +11,6 @@
 (def ^:private bucket-name "sqs-ext-bucket")
 (def ^:private queue-name "sqs-ext-queue")
 
-(defonce ^:private queue-url (atom nil))
-
 (def ^:private sqs-ext-client
   (sqs/sqs-ext-client bucket-name
                       (sqs-utils/configure-endpoint)
@@ -28,7 +26,7 @@
 (defn- start-action-service-queue-listener
   []
   (sqs-ext/handle-queue
-    @queue-url
+    queue-name
     dispatch-action-service
     {:bucket-name bucket-name}))
 
@@ -47,34 +45,15 @@
       (.await sigterm)
       (stop-listeners))))
 
-(defn- update-queue-url
-  "Run this once before the example in case the queue is already present."
-  [sqs-client]
-  (reset! queue-url (sqs/get-queue-url sqs-client queue-name)))
-
-(defn- create-example-queue
-  "If the queue has not yet been setup outside of this example,
-   run this once to create it."
-  []
-  (sqs/create-standard-queue sqs-ext-client queue-name))
-
-(defn- create-example-bucket
-  "If the bucket has not yet been setup outside of this example,
-   run this once to create it."
-  []
-  (s3/create-bucket (s3/s3-client) bucket-name))
-
 (defn- run-example
   []
+  (s3/create-bucket (s3/s3-client) bucket-name)
+  (sqs/create-standard-queue sqs-ext-client queue-name)
   (future (start-worker))
   (log/infof "Message with ID '%s' sent."
              (sqs/send-message sqs-ext-client
-                               @queue-url
+                               queue-name
                                {:foo "potatoes"})))
 
 (comment
-  (create-example-bucket)
-  (create-example-queue)
-  (update-queue-url sqs-ext-client)
-  (run-example)
-  )
+  (run-example))

@@ -1,7 +1,6 @@
 (ns clj-sqs-extended.sqs
   (:require [clj-sqs-extended.s3 :as s3]
-            [clj-sqs-extended.serdes :as serdes]
-            [clojure.tools.logging :as log])
+            [clj-sqs-extended.serdes :as serdes])
   (:import [com.amazonaws.services.sqs AmazonSQSClientBuilder]
            [com.amazon.sqs.javamessaging
             AmazonSQSExtendedClient
@@ -10,8 +9,7 @@
             CreateQueueRequest
             SendMessageRequest
             ReceiveMessageRequest
-            DeleteMessageRequest
-            PurgeQueueRequest]))
+            DeleteMessageRequest]))
 
 
 (defn sqs-ext-client
@@ -66,42 +64,40 @@
      :as   opts}]
    (create-queue sqs-client name opts)))
 
-(defn get-queue-url
+(defn queue-name-to-url
   [sqs-client name]
   ;; WATCHOUT: Yes, there will be a GetQueueUrlResult returned for which getQueueUrl
   ;;           has to be called again.
   (->> (.getQueueUrl sqs-client name)
        (.getQueueUrl)))
 
-(defn purge-queue
-  [sqs-client url]
-  (->> (PurgeQueueRequest. url)
-       (.purgeQueue sqs-client)))
-
 (defn delete-queue
-  [sqs-client url]
-  (.deleteQueue sqs-client url))
+  [sqs-client name]
+  (let [url (queue-name-to-url sqs-client name)]
+    (.deleteQueue sqs-client url)))
 
 (defn send-message
-  ([sqs-client url message]
-   (send-message sqs-client url message {}))
-  ([sqs-client url message
+  ([sqs-client queue-name message]
+   (send-message sqs-client queue-name message {}))
+  ([sqs-client queue-name message
     {:keys [format]
      :or   {format :transit}}]
-   (->> (serdes/serialize message format)
-        (SendMessageRequest. url)
-        (.sendMessage sqs-client)
-        (.getMessageId))))
+   (let [url (queue-name-to-url sqs-client queue-name)]
+     (->> (serdes/serialize message format)
+          (SendMessageRequest. url)
+          (.sendMessage sqs-client)
+          (.getMessageId)))))
 
 (defn send-fifo-message
-  ([sqs-client url message group-id]
-   (send-fifo-message sqs-client url message group-id {}))
+  ([sqs-client queue-name message group-id]
+   (send-fifo-message sqs-client queue-name message group-id {}))
 
-  ([sqs-client url message group-id
+  ([sqs-client queue-name message group-id
     {:keys [format
             deduplication-id]
      :or   {format :transit}}]
-   (let [request (->> (serdes/serialize message format)
+   (let [url (queue-name-to-url sqs-client queue-name)
+         request (->> (serdes/serialize message format)
                       (SendMessageRequest. url))]
      ;; WATCHOUT: The group ID is mandatory when sending fifo messages.
      (doto request (.setMessageGroupId group-id))
@@ -111,15 +107,16 @@
      (.sendMessage sqs-client request))))
 
 (defn delete-message
-  [sqs-client url message]
-  (->> (DeleteMessageRequest. url (:receiptHandle message))
-       (.deleteMessage sqs-client)))
+  [sqs-client queue-name message]
+  (let [url (queue-name-to-url sqs-client queue-name)]
+    (->> (DeleteMessageRequest. url (:receiptHandle message))
+         (.deleteMessage sqs-client))))
 
 (defn receive-message
-  ([sqs-client url]
-   (receive-message sqs-client url {}))
+  ([sqs-client queue-name]
+   (receive-message sqs-client queue-name {}))
 
-  ([sqs-client url
+  ([sqs-client queue-name
     {:keys [format
             wait-time
             auto-delete]
@@ -130,14 +127,15 @@
                (-> (bean message)
                    (select-keys [:messageId :receiptHandle :body]))
                {}))]
-     (let [request (doto (ReceiveMessageRequest. url)
+     (let [url (queue-name-to-url sqs-client queue-name)
+           request (doto (ReceiveMessageRequest. url)
                      (.setWaitTimeSeconds (int wait-time))
                      ;; WATCHOUT: This is a design choice to read one message at a time from the queue
                      (.setMaxNumberOfMessages (int 1)))
            response (.receiveMessage sqs-client request)
            message (->> (.getMessages response) (first) (extract-relevant-keys))]
        (when auto-delete
-         (delete-message sqs-client url message))
+         (delete-message sqs-client queue-name message))
        (if-let [payload (serdes/deserialize (:body message) format)]
          (assoc message :body payload)
          message)))))

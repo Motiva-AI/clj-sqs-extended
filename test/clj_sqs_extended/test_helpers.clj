@@ -1,5 +1,6 @@
 (ns clj-sqs-extended.test-helpers
-  (:require [tick.alpha.api :as t])
+  (:require [clj-sqs-extended.sqs :as sqs]
+            [tick.alpha.api :as t])
   (:import [java.util UUID]))
 
 
@@ -10,10 +11,13 @@
        (t/format (t/formatter "yyMMdd-hhmmss") (t/date-time))))
 
 (defn random-queue-name
-  [prefix suffix]
-  (str prefix
-       (UUID/randomUUID)
-       suffix))
+  ([]
+   (random-queue-name {}))
+  ([{:keys [prefix
+            suffix]}]
+   (str prefix
+        (UUID/randomUUID)
+        suffix)))
 
 (defn random-group-id
   []
@@ -31,12 +35,13 @@
    :payload (random-string-with-length 512)})
 
 (defn get-total-message-amount-in-queue
-  [sqs-client url]
-  (let [requested-attributes ["ApproximateNumberOfMessages"
-                              "ApproximateNumberOfMessagesNotVisible"
-                              "ApproximateNumberOfMessagesDelayed"]
-        result (.getQueueAttributes sqs-client url requested-attributes)]
-    (->> (.getAttributes result)
+  [sqs-client name]
+  (let [url (sqs/queue-name-to-url sqs-client name)]
+    (->> ["ApproximateNumberOfMessages"
+          "ApproximateNumberOfMessagesNotVisible"
+          "ApproximateNumberOfMessagesDelayed"]
+         (.getQueueAttributes sqs-client url)
+         (.getAttributes)
          (vals)
          (map read-string)
          (reduce +))))

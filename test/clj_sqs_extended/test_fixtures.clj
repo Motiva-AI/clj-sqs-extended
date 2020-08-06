@@ -6,30 +6,27 @@
 
 
 (defonce test-sqs-ext-client (atom nil))
-
-(def test-standard-queue-url (atom nil))
-(def test-fifo-queue-url (atom nil))
+(defonce test-standard-queue-name (helpers/random-queue-name))
+(defonce test-fifo-queue-name (helpers/random-queue-name {:suffix ".fifo"}))
 
 (defn wrap-standard-queue
   [f]
-  (let [queue (sqs-ext/create-standard-queue
-                @test-sqs-ext-client
-                (helpers/random-queue-name "queue-" ".standard"))]
-    (reset! test-standard-queue-url (.getQueueUrl queue))
-    (f)
-    (sqs-ext/delete-queue @test-sqs-ext-client @test-standard-queue-url)))
+  (sqs-ext/create-standard-queue @test-sqs-ext-client
+                                 test-standard-queue-name)
+  (f)
+  (sqs-ext/delete-queue @test-sqs-ext-client
+                        test-standard-queue-name))
 
 (defmacro with-standard-queue [& body]
   `(wrap-standard-queue (fn [] ~@body)))
 
 (defn wrap-fifo-queue
   [f]
-  (let [queue (sqs-ext/create-fifo-queue
-                @test-sqs-ext-client
-                (helpers/random-queue-name "queue-" ".fifo"))]
-    (reset! test-fifo-queue-url (.getQueueUrl queue))
-    (f)
-    (sqs-ext/delete-queue @test-sqs-ext-client @test-fifo-queue-url)))
+  (sqs-ext/create-fifo-queue @test-sqs-ext-client
+                             test-fifo-queue-name)
+  (f)
+  (sqs-ext/delete-queue @test-sqs-ext-client
+                        test-fifo-queue-name))
 
 (defmacro with-fifo-queue [& body]
   `(wrap-fifo-queue (fn [] ~@body)))
