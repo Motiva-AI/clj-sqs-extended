@@ -15,13 +15,13 @@
 
 
 (defn sqs-ext-client
-  [s3-bucket-name endpoint credentials]
-  (let [s3-client (s3/s3-client endpoint credentials)
+  [s3-bucket-name endpoint creds]
+  (let [s3-client (s3/s3-client endpoint creds)
         sqs-config (-> (ExtendedClientConfiguration.)
                        (.withLargePayloadSupportEnabled s3-client s3-bucket-name))
         builder (AmazonSQSClientBuilder/standard)
         builder (if endpoint (.withEndpointConfiguration builder endpoint) builder)
-        builder (if credentials (.withCredentials builder credentials) builder)]
+        builder (if creds (.withCredentials builder creds) builder)]
     (AmazonSQSExtendedClient. (.build builder) sqs-config)))
 
 (defn- create-queue
@@ -65,6 +65,13 @@
      :or   {fifo true}
      :as   opts}]
    (create-queue sqs-client name opts)))
+
+(defn get-queue-url
+  [sqs-client name]
+  ;; WATCHOUT: Yes, there will be a GetQueueUrlResult returned for which getQueueUrl
+  ;;           has to be called again.
+  (->> (.getQueueUrl sqs-client name)
+       (.getQueueUrl)))
 
 (defn purge-queue
   [sqs-client url]

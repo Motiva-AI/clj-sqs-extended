@@ -1,76 +1,80 @@
 (ns clj-sqs-extended.example
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.tools.logging :as log]
-            [clj-sqs-extended.core :as sqs-utils]
-            [clj-sqs-extended.sqs :as sqs-ext]
+            [clj-sqs-extended.core :as sqs-ext]
+            [clj-sqs-extended.sqs :as sqs]
             [clj-sqs-extended.s3 :as s3]
-            [clj-sqs-extended.test-helpers :as helpers])
+            [clj-sqs-extended.utils :as sqs-utils])
   (:import (java.util.concurrent CountDownLatch)))
 
 
-; TODO: This needs to moved somewhere (handle-queue?!) else!
-(defonce sqs-ext-client (atom nil))
-(defonce queue-url (atom nil))
+(def ^:private bucket-name "sqs-ext-bucket")
+(def ^:private queue-name "sqs-ext-queue")
 
-(defn wrap-sqs-ext-client
-  [f]
-  (let [bucket-name (helpers/random-bucket-name)
-        localstack-endpoint (helpers/configure-endpoint
-                              "http://localhost:4566"
-                              "us-east-2")
-        localstack-creds (helpers/configure-credentials
-                           "localstack"
-                           "localstack")
-        s3-client (s3/s3-client localstack-endpoint
-                                localstack-creds)
-        bucket (s3/create-bucket s3-client
-                                 bucket-name)]
-    (reset! sqs-ext-client (sqs-ext/sqs-ext-client bucket
-                                                   localstack-endpoint
-                                                   localstack-creds))
-    (let [queue (sqs-ext/create-standard-queue
-                  @sqs-ext-client
-                  (helpers/random-queue-name "queue-" ".standard"))]
-      (reset! queue-url (.getQueueUrl queue))
-      (f))))
+(defonce ^:private queue-url (atom nil))
 
-(defmacro with-sqs-ext-client [& body]
-  `(wrap-sqs-ext-client (fn [] ~@body)))
+(def ^:private sqs-ext-client
+  (sqs/sqs-ext-client bucket-name
+                      (sqs-utils/configure-endpoint)
+                      (sqs-utils/configure-credentials)))
 
-(defn dispatch-action-service
+(defn- dispatch-action-service
   ([message]
    (log/infof "I got %s which was auto-deleted." (:body message)))
   ([message done-fn]
    (done-fn)
    (log/infof "I got %s which I just deleted myself." (:body message))))
 
-(defn start-action-service-queue-listener
+(defn- start-action-service-queue-listener
   []
-  (sqs-utils/handle-queue
-    @sqs-ext-client
+  (sqs-ext/handle-queue
     @queue-url
-    dispatch-action-service))
+    dispatch-action-service
+    {:bucket-name bucket-name}))
 
-(defn start-queue-listeners
+(defn- start-queue-listeners
   []
   (let [stop-fns [(start-action-service-queue-listener)]]
     (fn []
       (doseq [f stop-fns]
         (f)))))
 
-(defn start-worker
+(defn- start-worker
   []
   (let [sigterm (CountDownLatch. 1)]
     (log/info "Starting queue workers...")
     (let [stop-listeners (start-queue-listeners)]
-      ;; (Thread/sleep 5000)
-      ;; (stop-listeners)
-      (.await sigterm))))
+      (.await sigterm)
+      (stop-listeners))))
 
-(with-sqs-ext-client
+(defn- update-queue-url
+  "Run this once before the example in case the queue is already present."
+  [sqs-client]
+  (reset! queue-url (sqs/get-queue-url sqs-client queue-name)))
+
+(defn- create-example-queue
+  "If the queue has not yet been setup outside of this example,
+   run this once to create it."
+  []
+  (sqs/create-standard-queue sqs-ext-client queue-name))
+
+(defn- create-example-bucket
+  "If the bucket has not yet been setup outside of this example,
+   run this once to create it."
+  []
+  (s3/create-bucket (s3/s3-client) bucket-name))
+
+(defn- run-example
+  []
   (future (start-worker))
-  (dotimes [_ 10]
-    (log/infof "Message with ID '%s' sent."
-               (sqs-ext/send-message @sqs-ext-client
-                                     @queue-url
-                                     (helpers/random-message)))))
+  (log/infof "Message with ID '%s' sent."
+             (sqs/send-message sqs-ext-client
+                               @queue-url
+                               {:foo "potatoes"})))
+
+(comment
+  (create-example-bucket)
+  (create-example-queue)
+  (update-queue-url sqs-ext-client)
+  (run-example)
+  )

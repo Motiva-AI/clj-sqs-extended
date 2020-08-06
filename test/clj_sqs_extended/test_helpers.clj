@@ -1,20 +1,7 @@
 (ns clj-sqs-extended.test-helpers
   (:require [tick.alpha.api :as t])
-  (:import [java.util UUID]
-           [com.amazonaws.client.builder AwsClientBuilder$EndpointConfiguration]
-           [com.amazonaws.auth
-            BasicAWSCredentials
-            AWSStaticCredentialsProvider]))
+  (:import [java.util UUID]))
 
-
-(defn configure-endpoint
-  "Creates an AWS endpoint configuration for the passed url and region."
-  [url region]
-  (AwsClientBuilder$EndpointConfiguration. url region))
-
-(defn configure-credentials
-  [access-key secret-key]
-  (AWSStaticCredentialsProvider. (BasicAWSCredentials. access-key secret-key)))
 
 (defn random-bucket-name
   []
