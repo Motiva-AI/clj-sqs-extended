@@ -1,52 +1,60 @@
 (ns clj-sqs-extended.test-fixtures
-  (:require [clj-sqs-extended.sqs :as sqs-ext]
+  (:require [environ.core :refer [env]]
+            [clj-sqs-extended.sqs :as sqs-ext]
+            [clj-sqs-extended.aws :as aws]
             [clj-sqs-extended.s3 :as s3]
             [clj-sqs-extended.test-helpers :as helpers]))
 
 
-(defonce test-sqs-ext-client (atom nil))
+;; TODO: The env values don't get loaded automatically?!
+(def aws-config {:access-key   (env :aws-access-key-id)
+                 :secret-key   (env :aws-secret-access-key)
+                 :endpoint-url (env :aws-sqs-endpoint-url)
+                 :region       (env :aws-sqs-region)})
 
-(def test-standard-queue-url (atom nil))
-(def test-fifo-queue-url (atom nil))
+(defonce test-sqs-ext-client (atom nil))
+(defonce test-standard-queue-name (helpers/random-queue-name))
+(defonce test-fifo-queue-name (helpers/random-queue-name {:suffix ".fifo"}))
 
 (defn wrap-standard-queue
   [f]
-  (let [queue (sqs-ext/create-standard-queue
-                @test-sqs-ext-client
-                (helpers/random-queue-name "queue-" ".standard"))]
-    (reset! test-standard-queue-url (.getQueueUrl queue))
-    (f)
-    (sqs-ext/delete-queue @test-sqs-ext-client @test-standard-queue-url)))
+  (sqs-ext/create-standard-queue @test-sqs-ext-client
+                                 test-standard-queue-name)
+  (f)
+  ;; WATCHOUT: An exception gets thrown when the queue gets taken down after
+  ;;           a test has completed but the stop-fn function has not yet closed
+  ;;           the receive-loop which had enough time to try another read from
+  ;;           the queue. Providing the test some time to do the teardown avoids
+  ;;           the exception (which does not affect the test result).
+  (Thread/sleep 500)
+  (sqs-ext/delete-queue @test-sqs-ext-client
+                        test-standard-queue-name))
 
-(defmacro with-standard-queue [& body]
+(defmacro with-test-standard-queue [& body]
   `(wrap-standard-queue (fn [] ~@body)))
 
 (defn wrap-fifo-queue
   [f]
-  (let [queue (sqs-ext/create-fifo-queue
-                @test-sqs-ext-client
-                (helpers/random-queue-name "queue-" ".fifo"))]
-    (reset! test-fifo-queue-url (.getQueueUrl queue))
-    (f)
-    (sqs-ext/delete-queue @test-sqs-ext-client @test-fifo-queue-url)))
+  (sqs-ext/create-fifo-queue @test-sqs-ext-client
+                             test-fifo-queue-name)
+  (f)
+  ;; WATCHOUT: See above.
+  (Thread/sleep 500)
+  (sqs-ext/delete-queue @test-sqs-ext-client
+                        test-fifo-queue-name))
 
-(defmacro with-fifo-queue [& body]
+(defmacro with-test-fifo-queue [& body]
   `(wrap-fifo-queue (fn [] ~@body)))
 
 (defn with-test-sqs-ext-client
   [f]
-  (let [bucket-name (helpers/random-bucket-name)
-        localstack-endpoint (helpers/configure-endpoint
-                              "http://localhost:4566"
-                              "us-east-2")
-        localstack-creds (helpers/configure-credentials
-                           "localstack"
-                           "localstack")
+  (let [localstack-endpoint (aws/configure-endpoint)
+        localstack-creds (aws/configure-credentials)
         s3-client (s3/s3-client localstack-endpoint
                                 localstack-creds)
-        bucket (s3/create-bucket s3-client
-                                 bucket-name)]
-    (reset! test-sqs-ext-client (sqs-ext/sqs-ext-client bucket
+        bucket-name (s3/create-bucket s3-client
+                                      (helpers/random-bucket-name))]
+    (reset! test-sqs-ext-client (sqs-ext/sqs-ext-client bucket-name
                                                         localstack-endpoint
                                                         localstack-creds))
     (f)

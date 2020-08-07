@@ -1,4 +1,5 @@
 (ns clj-sqs-extended.s3
+  (:require [clj-sqs-extended.aws :as aws])
   (:import [com.amazonaws.services.s3 AmazonS3ClientBuilder]
            [com.amazonaws.services.s3.model ListVersionsRequest]
            [com.amazonaws.services.s3.model
@@ -7,12 +8,14 @@
 
 
 (defn s3-client
-  [endpoint credentials]
-  (let [builder (-> (AmazonS3ClientBuilder/standard)
-                    (.withPathStyleAccessEnabled true))
-        builder (if endpoint (.withEndpointConfiguration builder endpoint) builder)
-        builder (if credentials (.withCredentials builder credentials) builder)]
-    (.build builder)))
+  ([]
+   (s3-client (aws/configure-endpoint) (aws/configure-credentials)))
+  ([endpoint creds]
+   (let [builder (-> (AmazonS3ClientBuilder/standard)
+                     (.withPathStyleAccessEnabled true))
+         builder (if endpoint (.withEndpointConfiguration builder endpoint) builder)
+         builder (if creds (.withCredentials builder creds) builder)]
+     (.build builder))))
 
 (defn configure-bucket-lifecycle
   [status expiration-days]

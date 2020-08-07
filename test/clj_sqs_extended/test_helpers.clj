@@ -1,20 +1,8 @@
 (ns clj-sqs-extended.test-helpers
-  (:require [tick.alpha.api :as t])
-  (:import [java.util UUID]
-           [com.amazonaws.client.builder AwsClientBuilder$EndpointConfiguration]
-           [com.amazonaws.auth
-            BasicAWSCredentials
-            AWSStaticCredentialsProvider]))
+  (:require [clj-sqs-extended.sqs :as sqs]
+            [tick.alpha.api :as t])
+  (:import [java.util UUID]))
 
-
-(defn configure-endpoint
-  "Creates an AWS endpoint configuration for the passed url and region."
-  [url region]
-  (AwsClientBuilder$EndpointConfiguration. url region))
-
-(defn configure-credentials
-  [access-key secret-key]
-  (AWSStaticCredentialsProvider. (BasicAWSCredentials. access-key secret-key)))
 
 (defn random-bucket-name
   []
@@ -23,10 +11,13 @@
        (t/format (t/formatter "yyMMdd-hhmmss") (t/date-time))))
 
 (defn random-queue-name
-  [prefix suffix]
-  (str prefix
-       (UUID/randomUUID)
-       suffix))
+  ([]
+   (random-queue-name {}))
+  ([{:keys [prefix
+            suffix]}]
+   (str prefix
+        (UUID/randomUUID)
+        suffix)))
 
 (defn random-group-id
   []
@@ -38,18 +29,30 @@
        (take length)
        (apply str)))
 
-(defn random-message
+(defn random-message-basic
   []
   {:id (rand-int 65535)
    :payload (random-string-with-length 512)})
 
+(defn random-message-with-time
+  []
+  {:id (rand-int 65535)
+   :payload (random-string-with-length 512)
+   :timestamp (t/inst)})
+
+(defn random-message-larger-than-256kb
+  []
+  {:id (rand-int 65535)
+   :payload (random-string-with-length 300000)})
+
 (defn get-total-message-amount-in-queue
-  [sqs-client url]
-  (let [requested-attributes ["ApproximateNumberOfMessages"
-                              "ApproximateNumberOfMessagesNotVisible"
-                              "ApproximateNumberOfMessagesDelayed"]
-        result (.getQueueAttributes sqs-client url requested-attributes)]
-    (->> (.getAttributes result)
+  [sqs-client name]
+  (let [url (sqs/queue-name-to-url sqs-client name)]
+    (->> ["ApproximateNumberOfMessages"
+          "ApproximateNumberOfMessagesNotVisible"
+          "ApproximateNumberOfMessagesDelayed"]
+         (.getQueueAttributes sqs-client url)
+         (.getAttributes)
          (vals)
          (map read-string)
          (reduce +))))
