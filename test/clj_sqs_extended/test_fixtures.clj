@@ -6,7 +6,6 @@
             [clj-sqs-extended.test-helpers :as helpers]))
 
 
-;; TODO: The env values don't get loaded automatically?!
 (def aws-config {:access-key   (env :aws-access-key-id)
                  :secret-key   (env :aws-secret-access-key)
                  :endpoint-url (env :aws-sqs-endpoint-url)
@@ -48,8 +47,8 @@
 
 (defn with-test-sqs-ext-client
   [f]
-  (let [localstack-endpoint (aws/configure-endpoint)
-        localstack-creds (aws/configure-credentials)
+  (let [localstack-endpoint (aws/configure-endpoint aws-config)
+        localstack-creds (aws/configure-credentials aws-config)
         s3-client (s3/s3-client localstack-endpoint
                                 localstack-creds)
         bucket-name (s3/create-bucket s3-client
