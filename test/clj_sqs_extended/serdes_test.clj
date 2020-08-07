@@ -5,29 +5,26 @@
             [tick.alpha.api :as t]))
 
 
-(def ^:private basic-map (helpers/random-message))
+(deftest roundtrip-transit-basic
+  (testing "Transit roundtrip with a basic message"
+    (let [message (helpers/random-message-basic)]
+      (is (= message
+             (serdes/deserialize
+               (serdes/serialize message :transit)
+               :transit))))))
 
-(def ^:private timestamp-map
-  {:step      1
-   :timestamp (t/inst)})
+(deftest roundtrip-transit-timestamp
+  (testing "Transit roundtrip with a message including a timestamp"
+    (let [message (helpers/random-message-with-time)]
+      (is (= message
+             (serdes/deserialize
+               (serdes/serialize message :transit)
+               :transit))))))
 
-(deftest roundtrip-transit-basic-map
-  (testing "Transit roundtrip with basic map"
-    (is (= basic-map
-           (serdes/deserialize
-             (serdes/serialize basic-map :transit)
-             :transit)))))
-
-(deftest roundtrip-transit-with-timestamp
-  (testing "Transit roundtrip with timestamp"
-    (is (= timestamp-map
-           (serdes/deserialize
-             (serdes/serialize timestamp-map :transit)
-             :transit)))))
-
-(deftest roundtrip-json-basic-map
-  (testing "JSON roundtrip with basic map"
-    (is (= basic-map
-           (serdes/deserialize
-             (serdes/serialize basic-map :json)
-             :json)))))
+(deftest roundtrip-json-basic
+  (testing "JSON roundtrip with a basic message"
+    (let [message (helpers/random-message-basic)]
+      (is (= message
+             (serdes/deserialize
+               (serdes/serialize message :json)
+               :json))))))

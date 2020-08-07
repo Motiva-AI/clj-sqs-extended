@@ -13,9 +13,11 @@
 
   ([sqs-ext-client queue-name out-chan
     {:keys [auto-delete
-            restart-delay-seconds]
+            restart-delay-seconds
+            format]
      :or   {auto-delete           true
-            restart-delay-seconds 1}}]
+            restart-delay-seconds 1
+            format                :transit}}]
    (let [queue-url (sqs-ext/queue-name-to-url sqs-ext-client
                                               queue-name)
          loop-state (atom {:running true
@@ -59,7 +61,9 @@
 
          (try
            ;; TODO: https://github.com/Motiva-AI/clj-sqs-extended/issues/22
-           (let [{:keys [body] :as message} (sqs-ext/receive-message sqs-ext-client queue-name)]
+           (let [{:keys [body] :as message} (sqs-ext/receive-message sqs-ext-client
+                                                                     queue-name
+                                                                     {:format format})]
              (cond
                (nil? message)
                (stop-loop)
@@ -106,9 +110,11 @@
     {:keys [queue-name
             s3-bucket-name
             num-handler-threads
-            auto-delete]
+            auto-delete
+            format]
      :or   {num-handler-threads 4
-            auto-delete         true}}
+            auto-delete         true
+            format              :transit}}
     handler-fn]
    (let [endpoint (aws/configure-endpoint aws-creds)
          creds (aws/configure-credentials aws-creds)
@@ -119,7 +125,8 @@
          stop-fn (receive-loop sqs-ext-client
                                queue-name
                                receive-chan
-                               {:auto-delete auto-delete})]
+                               {:auto-delete auto-delete
+                                :format      format})]
      ((log/infof (str "Starting receive loop for queue '%s' with:\n"
                       "  num-handler-threads: %d\n"
                       "  auto-delete: %s")

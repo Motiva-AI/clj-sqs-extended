@@ -25,12 +25,15 @@
 
                    :dependencies [[circleci/bond "0.4.0"]
                                   [circleci/circleci.test "0.4.3"]
-                                  [org.clojure/tools.namespace "1.0.0"]]
+                                  [org.clojure/tools.namespace "1.0.0"]
+                                  [environ "1.2.0"]]
 
-                   :env {:sqs-endpoint               "http://localhost:4566"
-                         :sqs-region                 "us-east-2"
-                         :aws-access-key-id          "local"
+                   :plugins [[lein-environ "1.2.0"]]
+
+                   :env {:aws-access-key-id          "local"
                          :aws-secret-access-key      "local"
+                         :aws-sqs-endpoint-url       "http://localhost:4566"
+                         :aws-sqs-region             "us-east-2"
                          :integration-aws-access-key ""
                          :integration-aws-secret-key ""}}}
 

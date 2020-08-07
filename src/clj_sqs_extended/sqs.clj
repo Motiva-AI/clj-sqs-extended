@@ -80,6 +80,7 @@
 (defn send-message
   ([sqs-client queue-name message]
    (send-message sqs-client queue-name message {}))
+
   ([sqs-client queue-name message
     {:keys [format]
      :or   {format :transit}}]
