@@ -20,6 +20,8 @@
   (sqs-ext/create-standard-queue @test-sqs-ext-client
                                  test-standard-queue-name)
   (f)
+  ;; WATCHOUT: https://github.com/Motiva-AI/clj-sqs-extended/issues/13
+  (Thread/sleep 500)
   (sqs-ext/delete-queue @test-sqs-ext-client
                         test-standard-queue-name))
 
@@ -31,6 +33,8 @@
   (sqs-ext/create-fifo-queue @test-sqs-ext-client
                              test-fifo-queue-name)
   (f)
+  ;; WATCHOUT: https://github.com/Motiva-AI/clj-sqs-extended/issues/13
+  (Thread/sleep 500)
   (sqs-ext/delete-queue @test-sqs-ext-client
                         test-fifo-queue-name))
 

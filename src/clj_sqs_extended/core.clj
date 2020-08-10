@@ -32,7 +32,6 @@
                            :stats    {:count         0
                                       :started-at    (t/now)
                                       :restart-count 0
-                                      :restarted-at  nil
                                       :queue-url     queue-url}})]
      (letfn [(restart-loop
                []
@@ -49,10 +48,10 @@
              (stop-loop
                []
                (when (:running @loop-state)
+                 (log/infof "Terminating receive-loop for queue '%s'" queue-name)
                  (swap! loop-state assoc :running false)
                  (async/close! (:messages @loop-state))
-                 (async/close! out-chan)
-                 (log/infof "Terminated receive-loop for queue '%s'" queue-name))
+                 (async/close! out-chan))
                (:stats @loop-state))
 
              (secs-between
@@ -95,7 +94,9 @@
                                  (not auto-delete) (assoc :done-fn done-fn))]
                  (if body
                    (>! out-chan msg)
-                   (log/warnf "Queue '%s' received a nil body message: %s" queue-name message))
+                   (log/warnf "Queue '%s' received a nil body message: %s"
+                              queue-name
+                              message))
                  (when auto-delete
                    (done-fn)))))
 

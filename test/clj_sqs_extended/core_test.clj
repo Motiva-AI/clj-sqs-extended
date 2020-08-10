@@ -1,6 +1,6 @@
 (ns clj-sqs-extended.core-test
   (:require [clojure.test :refer :all]
-            [clojure.core.async :refer [chan <!! >!! close! alt!!]]
+            [clojure.core.async :refer [chan <!!]]
             [clj-sqs-extended.core :as sqs-ext]
             [clj-sqs-extended.sqs :as sqs]
             [clj-sqs-extended.test-helpers :as helpers]

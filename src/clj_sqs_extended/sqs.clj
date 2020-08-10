@@ -15,6 +15,17 @@
             DeleteMessageRequest]))
 
 
+(defn- multiplex
+  [chs]
+  (let [c (chan)]
+    (doseq [ch chs]
+      (go-loop []
+        (let [v (<! ch)]
+          (>! c v)
+          (when (some? v)
+            (recur)))))
+    c))
+
 (defn sqs-ext-client
   ;; XXXFI: This shall build an extended client, therefore the bucket is mandatory.
   [s3-bucket-name endpoint creds]
@@ -145,38 +156,14 @@
          (assoc message :body payload)
          message)))))
 
-(defn- multiplex
-  [chs]
-  (let [c (chan)]
-    (doseq [ch chs]
-      (go-loop []
-        (let [v (<! ch)]
-          (>! c v)
-          (when (some? v)
-            (recur)))))
-    c))
-
-(defmacro go-catching
-  [& body]
-  `(async/go
-     (try
-       ~@body
-       (catch Exception e#
-         e#))))
-
-(defn- receive
+(defn- receive-to-channel
   [sqs-client queue-name opts]
   (let [chan (async/chan)]
-    (go-catching
-      (try
-        (loop []
-          (let [message (receive-message sqs-client queue-name opts)]
-            (when-not (empty? message)
-              (>! chan message))
-            (when-not (async-protocols/closed? chan)
-              (recur))))
-        (catch Exception e
-          (>! chan e))))
+    (go-loop []
+      (let [message (receive-message sqs-client queue-name opts)]
+        (>! chan message))
+      (when-not (async-protocols/closed? chan)
+        (recur)))
     chan))
 
 (defn receive-message-channeled
@@ -190,12 +177,12 @@
             format        :transit}
      :as   opts}]
    (if (= num-consumers 1)
-     (receive sqs-client queue-name opts)
+     (receive-to-channel sqs-client queue-name opts)
      (multiplex
        (loop [chs []
               n num-consumers]
          (if (= n 0)
            chs
-           (let [ch (receive sqs-client queue-name opts)]
+           (let [ch (receive-to-channel sqs-client queue-name opts)]
              (recur (conj chs ch) (dec n)))))))))
 
