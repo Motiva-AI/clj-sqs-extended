@@ -4,7 +4,8 @@
             [clojure.core.async :as async
              :refer [chan go-loop <! >! <!! >!! thread]]
             [tick.alpha.api :as t]
-            [clojure.tools.logging :as log]))
+            [clojure.tools.logging :as log]
+            [clj-sqs-extended.sqs :as sqs]))
 
 
 (defn receive-loop
@@ -14,33 +15,44 @@
   ([sqs-ext-client queue-name out-chan
     {:keys [auto-delete
             restart-delay-seconds
-            format]
+            format
+            num-consumers]
      :or   {auto-delete           true
             restart-delay-seconds 1
-            format                :transit}}]
+            format                :transit
+            num-consumers         1}
+     :as   opts}]
    (let [queue-url (sqs-ext/queue-name-to-url sqs-ext-client
                                               queue-name)
-         loop-state (atom {:running true
-                           :stats   {:count         0
-                                     :started-at    (t/now)
-                                     :restart-count 0
-                                     :restarted-at  nil
-                                     :queue-url     queue-url}})]
+         receive-to-chan #(sqs/receive-message-channeled sqs-ext-client
+                                                         queue-name
+                                                         opts)
+         loop-state (atom {:messages (receive-to-chan)
+                           :running  true
+                           :stats    {:count         0
+                                      :started-at    (t/now)
+                                      :restart-count 0
+                                      :restarted-at  nil
+                                      :queue-url     queue-url}})]
      (letfn [(restart-loop
                []
-               (log/infof "Restarting receive-loop for %s" queue-url)
-               (swap! loop-state
-                      (fn [state]
-                        (-> state
-                            (update-in [:stats :restart-count] inc)
-                            (assoc-in [:stats :restarted-at] (t/now))))))
+               (log/infof "Restarting receive-loop for queue '%s'" queue-name)
+               (let [messages-chan (:messages @loop-state)]
+                 (swap! loop-state
+                        (fn [state]
+                          (-> state
+                              (assoc :messages (receive-to-chan))
+                              (update-in [:stats :restart-count] inc)
+                              (assoc-in [:stats :restarted-at] (t/now)))))
+                 (async/close! messages-chan)))
 
              (stop-loop
                []
                (when (:running @loop-state)
-                 (log/infof "Terminating receive-loop for %s" queue-url)
                  (swap! loop-state assoc :running false)
-                 (async/close! out-chan))
+                 (async/close! (:messages @loop-state))
+                 (async/close! out-chan)
+                 (log/infof "Terminated receive-loop for queue '%s'" queue-name))
                (:stats @loop-state))
 
              (secs-between
@@ -60,10 +72,7 @@
          (swap! loop-state update-stats)
 
          (try
-           ;; TODO: https://github.com/Motiva-AI/clj-sqs-extended/issues/22
-           (let [{:keys [body] :as message} (sqs-ext/receive-message sqs-ext-client
-                                                                     queue-name
-                                                                     {:format format})]
+           (let [{:keys [body] :as message} (<! (:messages @loop-state))]
              (cond
                (nil? message)
                (stop-loop)
@@ -74,6 +83,9 @@
                            (assoc stats :last-wait-duration
                                         (secs-between this-pass-started-at
                                                       (t/now))))
+                 ;; WATCHOUT: Adding a restart delay so that this doesn't go into an
+                 ;;           abusively tight loop if the queue listener is failing to
+                 ;;           start continuously.
                  (<! (async/timeout (int (* restart-delay-seconds 1000))))
                  (restart-loop))
 

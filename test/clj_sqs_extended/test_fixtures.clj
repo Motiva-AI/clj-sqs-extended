@@ -20,12 +20,6 @@
   (sqs-ext/create-standard-queue @test-sqs-ext-client
                                  test-standard-queue-name)
   (f)
-  ;; WATCHOUT: An exception gets thrown when the queue gets taken down after
-  ;;           a test has completed but the stop-fn function has not yet closed
-  ;;           the receive-loop which had enough time to try another read from
-  ;;           the queue. Providing the test some time to do the teardown avoids
-  ;;           the exception (which does not affect the test result).
-  (Thread/sleep 500)
   (sqs-ext/delete-queue @test-sqs-ext-client
                         test-standard-queue-name))
 
@@ -37,8 +31,6 @@
   (sqs-ext/create-fifo-queue @test-sqs-ext-client
                              test-fifo-queue-name)
   (f)
-  ;; WATCHOUT: See above.
-  (Thread/sleep 500)
   (sqs-ext/delete-queue @test-sqs-ext-client
                         test-fifo-queue-name))
 

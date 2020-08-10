@@ -25,24 +25,24 @@
 
 (defn random-string-with-length
   [length]
-  (->> (repeatedly #(char (+ 40 (rand 86))))
+  (->> (repeatedly #(char (+ 32 (rand 94))))
        (take length)
        (apply str)))
 
 (defn random-message-basic
   []
-  {:id (rand-int 65535)
+  {:id      (rand-int 65535)
    :payload (random-string-with-length 512)})
 
 (defn random-message-with-time
   []
-  {:id (rand-int 65535)
-   :payload (random-string-with-length 512)
+  {:id        (rand-int 65535)
+   :payload   (random-string-with-length 512)
    :timestamp (t/inst)})
 
 (defn random-message-larger-than-256kb
   []
-  {:id (rand-int 65535)
+  {:id      (rand-int 65535)
    :payload (random-string-with-length 300000)})
 
 (defn get-total-message-amount-in-queue
