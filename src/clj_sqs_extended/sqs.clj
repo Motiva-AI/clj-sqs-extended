@@ -1,6 +1,9 @@
 (ns clj-sqs-extended.sqs
   (:require [clj-sqs-extended.s3 :as s3]
-            [clj-sqs-extended.serdes :as serdes])
+            [clj-sqs-extended.serdes :as serdes]
+            [clojure.core.async :as async
+             :refer [chan go-loop <! >! <!! >!! thread]]
+            [clojure.core.async.impl.protocols :as async-protocols])
   (:import [com.amazonaws.services.sqs AmazonSQSClientBuilder]
            [com.amazon.sqs.javamessaging
             AmazonSQSExtendedClient
@@ -11,6 +14,17 @@
             ReceiveMessageRequest
             DeleteMessageRequest]))
 
+
+(defn- multiplex
+  [chs]
+  (let [c (chan)]
+    (doseq [ch chs]
+      (go-loop []
+        (let [v (<! ch)]
+          (>! c v)
+          (when (some? v)
+            (recur)))))
+    c))
 
 (defn sqs-ext-client
   ;; XXXFI: This shall build an extended client, therefore the bucket is mandatory.
@@ -141,3 +155,34 @@
        (if-let [payload (serdes/deserialize (:body message) format)]
          (assoc message :body payload)
          message)))))
+
+(defn- receive-to-channel
+  [sqs-client queue-name opts]
+  (let [chan (async/chan)]
+    (go-loop []
+      (let [message (receive-message sqs-client queue-name opts)]
+        (>! chan message))
+      (when-not (async-protocols/closed? chan)
+        (recur)))
+    chan))
+
+(defn receive-message-channeled
+  ([sqs-client queue-name]
+   (receive-message-channeled sqs-client queue-name {}))
+
+  ([sqs-client queue-name
+    {:keys [num-consumers
+            format]
+     :or   {num-consumers 1
+            format        :transit}
+     :as   opts}]
+   (if (= num-consumers 1)
+     (receive-to-channel sqs-client queue-name opts)
+     (multiplex
+       (loop [chs []
+              n num-consumers]
+         (if (= n 0)
+           chs
+           (let [ch (receive-to-channel sqs-client queue-name opts)]
+             (recur (conj chs ch) (dec n)))))))))
+
