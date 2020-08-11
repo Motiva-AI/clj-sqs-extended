@@ -32,5 +32,5 @@
             secret-key]
      :or   {access-key "default"
             secret-key "default"}}]
-    (->> (BasicAWSCredentials. access-key secret-key)
-         (AWSStaticCredentialsProvider.))))
+   (->> (BasicAWSCredentials. access-key secret-key)
+        (AWSStaticCredentialsProvider.))))

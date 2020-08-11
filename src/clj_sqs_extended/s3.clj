@@ -52,4 +52,3 @@
           versions (->> (.listVersions s3-client version-request) (.getVersionSummaries))]
       (delete-object-versions versions))
     (.deleteBucket s3-client bucket-name)))
-

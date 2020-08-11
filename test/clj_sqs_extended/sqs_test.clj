@@ -9,10 +9,9 @@
 (use-fixtures :once fixtures/with-test-sqs-ext-client)
 
 (defonce test-messages
-  (into [] (take 5 (repeatedly helpers/random-message-basic))))
-
+         (into [] (take 5 (repeatedly helpers/random-message-basic))))
 (defonce test-message-larger-than-256kb
-  (helpers/random-string-with-length 300000))
+         (helpers/random-string-with-length 300000))
 
 (deftest can-receive-message-when-idle
   (testing "Receive empty response when no message has been send before"
@@ -29,27 +28,13 @@
       (let [test-message (first test-messages)]
         (doseq [format [:transit :json]]
           (log/infof "Message sent. ID: '%s'"
-                      (sqs-ext/send-message @fixtures/test-sqs-ext-client
-                                            fixtures/test-standard-queue-name
-                                            test-message {:format format}))
+                     (sqs-ext/send-message @fixtures/test-sqs-ext-client
+                                           fixtures/test-standard-queue-name
+                                           test-message {:format format}))
           (let [response (sqs-ext/receive-message @fixtures/test-sqs-ext-client
                                                   fixtures/test-standard-queue-name
                                                   {:format format})]
             (is (= test-message (:body response)))))))))
-
-(deftest can-auto-delete-message
-  (testing "Auto-Deleting a single message after receiving it"
-    (fixtures/with-test-standard-queue
-      (let [test-message (helpers/random-message-basic)]
-        (sqs-ext/send-message @fixtures/test-sqs-ext-client
-                              fixtures/test-standard-queue-name
-                              test-message)
-        (let [response (sqs-ext/receive-message @fixtures/test-sqs-ext-client
-                                                fixtures/test-standard-queue-name
-                                                {:auto-delete true})]
-          (is (= test-message (:body response)))
-          (is (= 0 (helpers/get-total-message-amount-in-queue @fixtures/test-sqs-ext-client
-                                                              fixtures/test-standard-queue-name))))))))
 
 (deftest can-receive-fifo-messages
   (testing "Receiving multiple messages from FIFO queue in correct order"

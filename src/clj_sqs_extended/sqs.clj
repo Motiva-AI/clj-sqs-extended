@@ -1,8 +1,7 @@
 (ns clj-sqs-extended.sqs
   (:require [clj-sqs-extended.s3 :as s3]
             [clj-sqs-extended.serdes :as serdes]
-            [clojure.core.async :as async
-             :refer [chan go-loop <! >! <!! >!! thread]]
+            [clojure.core.async :as async :refer [chan go-loop <! >!]]
             [clojure.core.async.impl.protocols :as async-protocols])
   (:import [com.amazonaws.services.sqs AmazonSQSClientBuilder]
            [com.amazon.sqs.javamessaging
@@ -12,7 +11,8 @@
             CreateQueueRequest
             SendMessageRequest
             ReceiveMessageRequest
-            DeleteMessageRequest]))
+            DeleteMessageRequest
+            PurgeQueueRequest]))
 
 
 (defn- multiplex
@@ -91,6 +91,12 @@
   (let [url (queue-name-to-url sqs-client name)]
     (.deleteQueue sqs-client url)))
 
+(defn purge-queue
+  [sqs-client name]
+  (let [url (queue-name-to-url sqs-client name)]
+    (->> (PurgeQueueRequest. url)
+         (.purgeQueue sqs-client))))
+
 (defn send-message
   ([sqs-client queue-name message]
    (send-message sqs-client queue-name message {}))
@@ -120,7 +126,9 @@
      (when deduplication-id
        ;; WATCHOUT: Refer to https://docs.aws.amazon.com/AWSJavaSDK/latest/javadoc/com/amazonaws/services/sqs/model/SendMessageRequest.html#setMessageDeduplicationId-java.lang.String-
        (doto request (.setMessageDeduplicationId deduplication-id)))
-     (.sendMessage sqs-client request))))
+     (->> request
+          (.sendMessage sqs-client)
+          (.getMessageId)))))
 
 (defn delete-message
   [sqs-client queue-name message]
@@ -134,8 +142,7 @@
 
   ([sqs-client queue-name
     {:keys [format
-            wait-time
-            auto-delete]
+            wait-time]
      :or   {format    :transit
             wait-time 0}}]
    (letfn [(extract-relevant-keys [message]
@@ -150,8 +157,6 @@
                      (.setMaxNumberOfMessages (int 1)))
            response (.receiveMessage sqs-client request)
            message (->> (.getMessages response) (first) (extract-relevant-keys))]
-       (when auto-delete
-         (delete-message sqs-client queue-name message))
        (if-let [payload (serdes/deserialize (:body message) format)]
          (assoc message :body payload)
          message)))))
@@ -185,4 +190,3 @@
            chs
            (let [ch (receive-to-channel sqs-client queue-name opts)]
              (recur (conj chs ch) (dec n)))))))))
-
