@@ -1,17 +1,5 @@
 # clj-sqs-extended
 
-## Running the tests
-
-Tests can be run locally the same way as they will be run via CircleCI.
-Please install the [circleci-cli-tool](https://circleci.com/docs/2.0/local-cli/)
-tool for your OS of choice and configure it according to the manual.
-
-Then spin up the entire infrastructure and run the tests with:
-
-```
-$> circleci local execute --job build
-```
-
 ## API Highlight
 
 Create a worker for consuming an SQS queue (Paul: I'm not sure about this API for handle-queue yet):
@@ -118,5 +106,19 @@ sqs-utils.core/send-fifo-message
 (send-message (queue/aws-creds) (queue/queue-url :action-service) {:foo "potatoes"})
 => nil
 "I got potatoes"
+```
+
+## Development
+
+### Requirements
+
+- [circleci-cli-tool](https://circleci.com/docs/2.0/local-cli/)
+
+### Testing
+
+Tests are run inside a CircleCI Docker container on localhost.
+
+```
+$ make test
 ```
 
