@@ -49,7 +49,7 @@ jobs:
           command: lein test :all
 
       - store_test_results:
-          path: ~/test_output
+          path: target/test_output
 
       - save_cache:
           paths:
