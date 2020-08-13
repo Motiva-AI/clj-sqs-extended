@@ -1,6 +1,6 @@
 (require '[circleci.test.report.junit :as junit])
 
-{:test-results-dir "target/test-results"
+{:test-results-dir "target/test_output"
  :reporters        [circleci.test.report/clojure-test-reporter
                     junit/reporter]
 
