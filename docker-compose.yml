@@ -1,0 +1,18 @@
+version: "3.8"
+services:
+
+  localstack:
+    image: localstack/localstack
+    container_name: localstack
+    ports:
+      - "4566-4599:4566-4599"
+      - "9000:9000"
+    environment:
+      - SERVICES=sqs,s3
+      - DEFAULT_REGION=us-east-2
+      - DATA_DIR=/tmp/localstack/data
+      - TMPDIR=/tmp/localstack
+      - HOST_TMP_FOLDER=/tmp
+      - PORT_WEB_UI=9000
+      - LAMBDA_EXECUTOR=local
+      - DOCKER_HOST=unix:///var/run/docker.sock

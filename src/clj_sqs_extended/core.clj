@@ -140,19 +140,19 @@
                                receive-chan
                                {:auto-delete auto-delete
                                 :format      format})]
-     ((log/infof (str "Starting receive loop for queue '%s' with:\n"
-                      "  num-handler-threads: %d\n"
-                      "  auto-delete: %s")
-                 queue-name num-handler-threads auto-delete)
-      (dotimes [_ num-handler-threads]
-        (thread
-          (loop []
-            (when-let [message (<!! receive-chan)]
-              (try
-                (if auto-delete
-                  (handler-fn message)
-                  (handler-fn message (:done-fn message)))
-                (catch Throwable t
-                  (log/error t "SQS handler function threw an error.")))
-              (recur)))))
-      stop-fn))))
+     (log/infof (str "Starting receive loop for queue '%s' with:\n"
+                     "  num-handler-threads: %d\n"
+                     "  auto-delete: %s")
+                queue-name num-handler-threads auto-delete)
+     (dotimes [_ num-handler-threads]
+       (thread
+         (loop []
+           (when-let [message (<!! receive-chan)]
+             (try
+               (if auto-delete
+                 (handler-fn message)
+                 (handler-fn message (:done-fn message)))
+               (catch Throwable t
+                 (log/error t "SQS handler function threw an error.")))
+             (recur)))))
+     stop-fn)))
