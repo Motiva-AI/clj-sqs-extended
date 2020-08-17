@@ -9,12 +9,6 @@
   [t1 t2]
   (t/seconds (t/between t1 t2)))
 
-(defn- create-receive-channel
-  [sqs-ext-client queue-name receive-opts]
-  #(sqs/receive-message-channeled sqs-ext-client
-                                  queue-name
-                                  receive-opts))
-
 (defn- init-receive-loop-state
   [sqs-ext-client queue-name receive-opts out-chan]
   (log/infof "Initializing new receive-loop state for queue '%s'" queue-name)
@@ -23,20 +17,10 @@
                       :restart-count 0
                       :started-at    (t/now)}
          :queue-name queue-name
-         :in-chan    ((create-receive-channel sqs-ext-client
-                                              queue-name
-                                              receive-opts))
+         :in-chan    (sqs/receive-message-channeled sqs-ext-client
+                                                    queue-name
+                                                    receive-opts)
          :out-chan   out-chan}))
-
-(defn- stop-receive-loop
-  [loop-state]
-  (when (:running @loop-state)
-    (log/infof "Terminating receive-loop for queue '%s'" (:queue-name @loop-state))
-    (swap! loop-state assoc :running false)
-    (swap! loop-state assoc-in [:stats :stopped-at] (t/now))
-    (close! (:in-chan @loop-state))
-    (close! (:out-chan @loop-state))
-    (:stats @loop-state)))
 
 (defn- update-receive-loop-stats
   [loop-state]
@@ -55,14 +39,24 @@
     (swap! loop-state
            (fn [state]
              (-> state
-                 (assoc :in-chan ((create-receive-channel sqs-ext-client
-                                                          (:queue-name @loop-state)
-                                                          receive-opts)))
+                 (assoc :in-chan (sqs/receive-message-channeled sqs-ext-client
+                                                                (:queue-name @loop-state)
+                                                                receive-opts))
                  (update-in [:stats :restart-count] inc)
                  (assoc-in [:stats :restarted-at] (t/now)))))
     (close! old-in-chan)))
 
-(defn- handle-receive-error
+(defn- stop-receive-loop
+  [loop-state]
+  (when (:running @loop-state)
+    (log/infof "Terminating receive-loop for queue '%s'" (:queue-name @loop-state))
+    (swap! loop-state assoc :running false)
+    (swap! loop-state assoc-in [:stats :stopped-at] (t/now))
+    (close! (:in-chan @loop-state))
+    (close! (:out-chan @loop-state))
+    (:stats @loop-state)))
+
+(defn- handle-message-receival-error
   [sqs-ext-client loop-state error restart-delay-seconds receive-opts]
   (let [{:keys [this-pass-started-at] :as stats} (:stats @loop-state)]
     (log/warn error "Received an error!"
@@ -121,11 +115,11 @@
              (stop-receive-loop loop-state)
 
              (instance? Throwable message)
-             (handle-receive-error sqs-ext-client
-                                   loop-state
-                                   message
-                                   restart-delay-seconds
-                                   receive-opts)
+             (handle-message-receival-error sqs-ext-client
+                                            loop-state
+                                            message
+                                            restart-delay-seconds
+                                            receive-opts)
 
              (not (empty? message))
              (process-message sqs-ext-client
