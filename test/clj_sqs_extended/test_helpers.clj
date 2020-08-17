@@ -1,8 +1,10 @@
 (ns clj-sqs-extended.test-helpers
-  (:require [clj-sqs-extended.sqs :as sqs]
-            [tick.alpha.api :as t])
+  (:require [tick.alpha.api :as t]
+            [clj-sqs-extended.sqs :as sqs])
   (:import [java.util UUID]))
 
+
+(def purge-queue sqs/purge-queue)
 
 (defn random-bucket-name
   []

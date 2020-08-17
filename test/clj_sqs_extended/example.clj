@@ -1,9 +1,8 @@
 (ns clj-sqs-extended.example
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.tools.logging :as log]
-            [clj-sqs-extended.core :as sqs-ext]
             [clj-sqs-extended.aws :as aws]
-            [clj-sqs-extended.sqs :as sqs]
+            [clj-sqs-extended.core :as sqs-ext]
             [clj-sqs-extended.s3 :as s3])
   (:import (java.util.concurrent CountDownLatch)))
 
@@ -19,9 +18,9 @@
                              :auto-delete         true})
 
 (def ^:private sqs-ext-client
-  (sqs/sqs-ext-client (:s3-bucket-name queue-config)
-                      (aws/configure-endpoint aws-config)
-                      (aws/configure-credentials aws-config)))
+  (sqs-ext/sqs-ext-client (:s3-bucket-name queue-config)
+                          (aws/configure-endpoint aws-config)
+                          (aws/configure-credentials aws-config)))
 
 (defn- dispatch-action-service
   ([message]
@@ -55,15 +54,15 @@
   []
   (s3/create-bucket (s3/s3-client)
                     (:s3-bucket-name queue-config))
-  (sqs/create-standard-queue sqs-ext-client
-                             (:queue-name queue-config))
+  (sqs-ext/create-standard-queue sqs-ext-client
+                                 (:queue-name queue-config))
   (future (start-worker))
   (let [message {:foo "potatoes"}]
     (log/infof "I sent %s with ID '%s'."
                message
-               (sqs/send-message sqs-ext-client
-                                 (:queue-name queue-config)
-                                 message))))
+               (sqs-ext/send-message sqs-ext-client
+                                     (:queue-name queue-config)
+                                     message))))
 
 (comment
   (run-example))

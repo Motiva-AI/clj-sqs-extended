@@ -1,8 +1,8 @@
 (ns clj-sqs-extended.test-fixtures
   (:require [environ.core :refer [env]]
-            [clj-sqs-extended.sqs :as sqs-ext]
             [clj-sqs-extended.aws :as aws]
             [clj-sqs-extended.s3 :as s3]
+            [clj-sqs-extended.sqs :as sqs]
             [clj-sqs-extended.test-helpers :as helpers]))
 
 
@@ -17,26 +17,26 @@
 
 (defn wrap-standard-queue
   [f]
-  (sqs-ext/create-standard-queue @test-sqs-ext-client
-                                 test-standard-queue-name)
+  (sqs/create-standard-queue @test-sqs-ext-client
+                             test-standard-queue-name)
   (f)
   ;; TODO: https://github.com/Motiva-AI/clj-sqs-extended/issues/27
   (Thread/sleep 500)
-  (sqs-ext/delete-queue @test-sqs-ext-client
-                        test-standard-queue-name))
+  (sqs/delete-queue @test-sqs-ext-client
+                    test-standard-queue-name))
 
 (defmacro with-test-standard-queue [& body]
   `(wrap-standard-queue (fn [] ~@body)))
 
 (defn wrap-fifo-queue
   [f]
-  (sqs-ext/create-fifo-queue @test-sqs-ext-client
-                             test-fifo-queue-name)
+  (sqs/create-fifo-queue @test-sqs-ext-client
+                         test-fifo-queue-name)
   (f)
   ;; TODO: https://github.com/Motiva-AI/clj-sqs-extended/issues/27
   (Thread/sleep 500)
-  (sqs-ext/delete-queue @test-sqs-ext-client
-                        test-fifo-queue-name))
+  (sqs/delete-queue @test-sqs-ext-client
+                    test-fifo-queue-name))
 
 (defmacro with-test-fifo-queue [& body]
   `(wrap-fifo-queue (fn [] ~@body)))
@@ -49,9 +49,9 @@
                                 localstack-creds)
         bucket-name (s3/create-bucket s3-client
                                       (helpers/random-bucket-name))]
-    (reset! test-sqs-ext-client (sqs-ext/sqs-ext-client bucket-name
-                                                        localstack-endpoint
-                                                        localstack-creds))
+    (reset! test-sqs-ext-client (sqs/sqs-ext-client bucket-name
+                                                    localstack-endpoint
+                                                    localstack-creds))
     (f)
     (s3/purge-bucket s3-client
                      bucket-name)))
