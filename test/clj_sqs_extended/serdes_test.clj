@@ -1,8 +1,7 @@
 (ns clj-sqs-extended.serdes-test
   (:require [clojure.test :refer [deftest is testing]]
             [clj-sqs-extended.serdes :as serdes]
-            [clj-sqs-extended.test-helpers :as helpers]
-            [tick.alpha.api :as t]))
+            [clj-sqs-extended.test-helpers :as helpers]))
 
 
 (deftest roundtrip-transit-basic
