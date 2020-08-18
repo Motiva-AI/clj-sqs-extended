@@ -43,15 +43,11 @@
 
 (defn with-test-sqs-ext-client
   [f]
-  (let [localstack-endpoint (aws/configure-endpoint aws-config)
-        localstack-creds (aws/configure-credentials aws-config)
-        s3-client (s3/s3-client localstack-endpoint
-                                localstack-creds)
+  (let [s3-client (s3/s3-client aws-config)
         bucket-name (s3/create-bucket s3-client
                                       (helpers/random-bucket-name))]
-    (reset! test-sqs-ext-client (sqs/sqs-ext-client bucket-name
-                                                    localstack-endpoint
-                                                    localstack-creds))
+    (reset! test-sqs-ext-client (sqs/sqs-ext-client aws-config
+                                                    bucket-name))
     (f)
     (s3/purge-bucket s3-client
                      bucket-name)))

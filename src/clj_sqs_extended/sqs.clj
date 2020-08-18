@@ -1,12 +1,13 @@
 (ns clj-sqs-extended.sqs
   (:require [clojure.core.async :refer [chan go-loop <! >!]]
             [clojure.core.async.impl.protocols :as async-protocols]
+            [clj-sqs-extended.aws :as aws]
             [clj-sqs-extended.s3 :as s3]
             [clj-sqs-extended.serdes :as serdes])
-  (:import [com.amazonaws.services.sqs AmazonSQSClientBuilder]
-           [com.amazon.sqs.javamessaging
+  (:import [com.amazon.sqs.javamessaging
             AmazonSQSExtendedClient
             ExtendedClientConfiguration]
+           [com.amazonaws.services.sqs AmazonSQSClientBuilder]
            [com.amazonaws.services.sqs.model
             CreateQueueRequest
             DeleteMessageRequest
@@ -16,11 +17,14 @@
 
 
 (defn sqs-ext-client
-  ;; XXXFI: This shall build an extended client, therefore the bucket is mandatory.
-  [s3-bucket-name endpoint creds]
-  (let [s3-client (s3/s3-client endpoint creds)
-        sqs-config (-> (ExtendedClientConfiguration.)
-                       (.withLargePayloadSupportEnabled s3-client s3-bucket-name))
+  [aws-config & [s3-bucket-name]]
+  (let [endpoint (aws/configure-endpoint aws-config)
+        creds (aws/configure-credentials aws-config)
+        s3-client (when (some? s3-bucket-name) (s3/s3-client aws-config))
+        sqs-config (if s3-client
+                     (-> (ExtendedClientConfiguration.)
+                         (.withLargePayloadSupportEnabled s3-client s3-bucket-name))
+                     (ExtendedClientConfiguration.))
         builder (AmazonSQSClientBuilder/standard)
         builder (if endpoint (.withEndpointConfiguration builder endpoint) builder)
         builder (if creds (.withCredentials builder creds) builder)]

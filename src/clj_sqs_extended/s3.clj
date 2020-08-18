@@ -1,21 +1,21 @@
 (ns clj-sqs-extended.s3
   (:require [clj-sqs-extended.aws :as aws])
   (:import [com.amazonaws.services.s3 AmazonS3ClientBuilder]
-           [com.amazonaws.services.s3.model ListVersionsRequest]
            [com.amazonaws.services.s3.model
             BucketLifecycleConfiguration
-            BucketLifecycleConfiguration$Rule]))
+            BucketLifecycleConfiguration$Rule
+            ListVersionsRequest]))
 
 
 (defn s3-client
-  ([]
-   (s3-client (aws/configure-endpoint) (aws/configure-credentials)))
-  ([endpoint creds]
-   (let [builder (-> (AmazonS3ClientBuilder/standard)
-                     (.withPathStyleAccessEnabled true))
-         builder (if endpoint (.withEndpointConfiguration builder endpoint) builder)
-         builder (if creds (.withCredentials builder creds) builder)]
-     (.build builder))))
+  [aws-config]
+  (let [endpoint (aws/configure-endpoint aws-config)
+        creds (aws/configure-credentials aws-config)]
+    (let [builder (-> (AmazonS3ClientBuilder/standard)
+                      (.withPathStyleAccessEnabled true))
+          builder (if endpoint (.withEndpointConfiguration builder endpoint) builder)
+          builder (if creds (.withCredentials builder creds) builder)]
+      (.build builder))))
 
 (defn configure-bucket-lifecycle
   [status expiration-days]
@@ -27,6 +27,7 @@
 (defn create-bucket
   ([s3-client name]
    (create-bucket s3-client name (configure-bucket-lifecycle "Enabled" 14)))
+
   ([s3-client name lifecycle]
    (doto s3-client
      (.createBucket name)
