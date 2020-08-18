@@ -1,7 +1,7 @@
 (ns clj-sqs-extended.sqs-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [clojure.tools.logging :as log]
-            [clj-sqs-extended.sqs :as sqs]
+            [clj-sqs-extended.aws.sqs :as sqs]
             [clj-sqs-extended.test-fixtures :as fixtures]
             [clj-sqs-extended.test-helpers :as helpers]))
 

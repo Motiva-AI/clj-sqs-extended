@@ -1,8 +1,7 @@
-(ns clj-sqs-extended.serdes
+(ns clj-sqs-extended.internal.serdes
   ;; WATCHOUT: Check for future upstream improvements to use directly:
   ;;           https://github.com/henryw374/time-literals/issues/2
   (:require [cognitect.transit :as transit]
-            [tick.alpha.api :as t]
             [cheshire.core :as json]
             [time-literals.read-write])
   (:import [java.io ByteArrayOutputStream ByteArrayInputStream]

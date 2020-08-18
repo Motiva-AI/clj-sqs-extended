@@ -2,7 +2,7 @@
   (:require [clojure.test :refer :all]
             [clojure.core.async :refer [chan <!!]]
             [clj-sqs-extended.core :as sqs-ext]
-            [clj-sqs-extended.internal :as internal]
+            [clj-sqs-extended.internal.receive :as receive]
             [clj-sqs-extended.test-fixtures :as fixtures]
             [clj-sqs-extended.test-helpers :as helpers])
   (:import (com.amazonaws.services.sqs.model QueueDoesNotExistException)))
@@ -20,10 +20,10 @@
     (doseq [format [:transit :json]]
       (fixtures/with-test-standard-queue
         (let [out-chan (chan)
-              stop-fn (internal/receive-loop @fixtures/test-sqs-ext-client
-                                             fixtures/test-standard-queue-name
-                                             out-chan
-                                             {:format format})]
+              stop-fn (receive/receive-loop @fixtures/test-sqs-ext-client
+                                            fixtures/test-standard-queue-name
+                                            out-chan
+                                            {:format format})]
           (is (fn? stop-fn))
           (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
                                              fixtures/test-standard-queue-name
@@ -41,9 +41,9 @@
   (testing "Sending a message including a timestamp works"
     (fixtures/with-test-standard-queue
       (let [out-chan (chan)
-            stop-fn (internal/receive-loop @fixtures/test-sqs-ext-client
-                                           fixtures/test-standard-queue-name
-                                           out-chan)]
+            stop-fn (receive/receive-loop @fixtures/test-sqs-ext-client
+                                          fixtures/test-standard-queue-name
+                                          out-chan)]
         (is (fn? stop-fn))
         (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
                                            fixtures/test-standard-queue-name
@@ -55,9 +55,9 @@
   (testing "Sending and receiving of a 256k+ message works"
     (fixtures/with-test-standard-queue
       (let [out-chan (chan)
-            stop-fn (internal/receive-loop @fixtures/test-sqs-ext-client
-                                           fixtures/test-standard-queue-name
-                                           out-chan)]
+            stop-fn (receive/receive-loop @fixtures/test-sqs-ext-client
+                                          fixtures/test-standard-queue-name
+                                          out-chan)]
         (is (fn? stop-fn))
         (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
                                            fixtures/test-standard-queue-name
@@ -80,10 +80,10 @@
         (helpers/purge-queue @fixtures/test-sqs-ext-client
                              fixtures/test-fifo-queue-name)
         (let [out-chan (chan)
-              stop-fn (internal/receive-loop @fixtures/test-sqs-ext-client
-                                             fixtures/test-fifo-queue-name
-                                             out-chan
-                                             {:format format})]
+              stop-fn (receive/receive-loop @fixtures/test-sqs-ext-client
+                                            fixtures/test-fifo-queue-name
+                                            out-chan
+                                            {:format format})]
           (doseq [message test-messages-basic]
             (is (string? (sqs-ext/send-fifo-message @fixtures/test-sqs-ext-client
                                                     fixtures/test-fifo-queue-name
@@ -100,11 +100,11 @@
     (doseq [format [:transit :json]]
       (fixtures/with-test-standard-queue
         (let [out-chan (chan)
-              stop-fn (internal/receive-loop @fixtures/test-sqs-ext-client
-                                             fixtures/test-standard-queue-name
-                                             out-chan
-                                             {:format      format
-                                              :auto-delete false})]
+              stop-fn (receive/receive-loop @fixtures/test-sqs-ext-client
+                                            fixtures/test-standard-queue-name
+                                            out-chan
+                                            {:format      format
+                                             :auto-delete false})]
           (is (fn? stop-fn))
           (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
                                              fixtures/test-standard-queue-name
@@ -122,11 +122,11 @@
     (doseq [format [:transit :json]]
       (fixtures/with-test-standard-queue
         (let [out-chan (chan)
-              stop-fn (internal/receive-loop @fixtures/test-sqs-ext-client
-                                             fixtures/test-standard-queue-name
-                                             out-chan
-                                             {:format      format
-                                              :auto-delete true})]
+              stop-fn (receive/receive-loop @fixtures/test-sqs-ext-client
+                                            fixtures/test-standard-queue-name
+                                            out-chan
+                                            {:format      format
+                                             :auto-delete true})]
           (is (fn? stop-fn))
           (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
                                              fixtures/test-standard-queue-name
@@ -141,10 +141,10 @@
     (doseq [format [:transit :json]]
       (fixtures/with-test-standard-queue
         (let [out-chan (chan)
-              stop-fn (internal/receive-loop @fixtures/test-sqs-ext-client
-                                             fixtures/test-standard-queue-name
-                                             out-chan
-                                             {:format format})]
+              stop-fn (receive/receive-loop @fixtures/test-sqs-ext-client
+                                            fixtures/test-standard-queue-name
+                                            out-chan
+                                            {:format format})]
           (is (fn? stop-fn))
           (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
                                              fixtures/test-standard-queue-name

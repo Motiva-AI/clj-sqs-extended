@@ -1,5 +1,5 @@
-(ns clj-sqs-extended.s3
-  (:require [clj-sqs-extended.aws :as aws])
+(ns clj-sqs-extended.aws.s3
+  (:require [clj-sqs-extended.aws.configuration :as aws])
   (:import [com.amazonaws.services.s3 AmazonS3ClientBuilder]
            [com.amazonaws.services.s3.model
             BucketLifecycleConfiguration
