@@ -50,16 +50,25 @@
   (let [sqs-ext-client (sqs-ext/sqs-ext-client aws-config
                                                (:s3-bucket-name queue-config))
         s3-client (s3/s3-client aws-config)]
+    ;; HINT: This may not be necessary in a real-world sitation where you setup
+    ;;       your queues and buckets directly via AWS.
     (s3/create-bucket s3-client
                       (:s3-bucket-name queue-config))
     (sqs-ext/create-standard-queue sqs-ext-client
                                    (:queue-name queue-config))
+
+    ;; Start processing all received messages ...
     (future (start-worker))
+
+    ;; Send a test message ...
     (let [message (helpers/random-message-larger-than-256kb)]
       (log/infof "Sent message with ID '%s'."
                  (sqs-ext/send-message sqs-ext-client
                                        (:queue-name queue-config)
                                        message)))
+
+    ;; HINT: This also most likely will not be necessary/desired in a real-world
+    ;;       sitation!
     (s3/purge-bucket s3-client
                      (:s3-bucket-name queue-config))))
 
