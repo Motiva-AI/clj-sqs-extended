@@ -1,6 +1,6 @@
 (ns clj-sqs-extended.serdes-test
   (:require [clojure.test :refer [deftest is testing]]
-            [clj-sqs-extended.serdes :as serdes]
+            [clj-sqs-extended.internal.serdes :as serdes]
             [clj-sqs-extended.test-helpers :as helpers]))
 
 

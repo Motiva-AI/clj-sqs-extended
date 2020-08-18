@@ -1,8 +1,8 @@
 (ns clj-sqs-extended.core
   (:require [clojure.core.async :refer [chan <! >! <!! thread]]
             [clojure.tools.logging :as log]
-            [clj-sqs-extended.internal :as internal]
-            [clj-sqs-extended.sqs :as sqs]))
+            [clj-sqs-extended.internal.receive :as receive]
+            [clj-sqs-extended.aws.sqs :as sqs]))
 
 
 ;; Conveniance declarations
@@ -49,11 +49,11 @@
    handler-fn]
   (let [sqs-ext-client (sqs/sqs-ext-client aws-creds s3-bucket-name)
         receive-chan (chan)
-        stop-fn (internal/receive-loop sqs-ext-client
-                                       queue-name
-                                       receive-chan
-                                       {:auto-delete auto-delete
-                                        :format      format})]
+        stop-fn (receive/receive-loop sqs-ext-client
+                                      queue-name
+                                      receive-chan
+                                      {:auto-delete auto-delete
+                                       :format      format})]
     (log/infof (str "Now handling queue '%s' with:\n"
                     "  num-handler-threads: %d\n"
                     "  auto-delete: %s\n"

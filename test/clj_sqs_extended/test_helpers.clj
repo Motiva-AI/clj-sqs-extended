@@ -1,6 +1,6 @@
 (ns clj-sqs-extended.test-helpers
   (:require [tick.alpha.api :as t]
-            [clj-sqs-extended.sqs :as sqs])
+            [clj-sqs-extended.aws.sqs :as sqs])
   (:import [java.util UUID]))
 
 

@@ -1,4 +1,4 @@
-(ns clj-sqs-extended.aws
+(ns clj-sqs-extended.aws.configuration
   (:import [com.amazonaws.auth
             AWSStaticCredentialsProvider
             BasicAWSCredentials]

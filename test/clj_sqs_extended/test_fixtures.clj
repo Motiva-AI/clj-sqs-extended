@@ -1,8 +1,8 @@
 (ns clj-sqs-extended.test-fixtures
   (:require [environ.core :refer [env]]
-            [clj-sqs-extended.aws :as aws]
-            [clj-sqs-extended.s3 :as s3]
-            [clj-sqs-extended.sqs :as sqs]
+            [clj-sqs-extended.aws.configuration :as aws]
+            [clj-sqs-extended.aws.s3 :as s3]
+            [clj-sqs-extended.aws.sqs :as sqs]
             [clj-sqs-extended.test-helpers :as helpers]))
 
 

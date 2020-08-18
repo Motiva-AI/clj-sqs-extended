@@ -1,8 +1,8 @@
-(ns clj-sqs-extended.internal
+(ns clj-sqs-extended.internal.receive
   (:require [clojure.core.async :refer [chan go go-loop close! timeout <! >!]]
             [clojure.tools.logging :as log]
             [tick.alpha.api :as t]
-            [clj-sqs-extended.sqs :as sqs]))
+            [clj-sqs-extended.aws.sqs :as sqs]))
 
 
 (defn- secs-between

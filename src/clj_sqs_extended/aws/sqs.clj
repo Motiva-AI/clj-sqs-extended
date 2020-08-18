@@ -1,9 +1,9 @@
-(ns clj-sqs-extended.sqs
+(ns clj-sqs-extended.aws.sqs
   (:require [clojure.core.async :refer [chan go-loop <! >!]]
             [clojure.core.async.impl.protocols :as async-protocols]
-            [clj-sqs-extended.aws :as aws]
-            [clj-sqs-extended.s3 :as s3]
-            [clj-sqs-extended.serdes :as serdes])
+            [clj-sqs-extended.aws.configuration :as aws]
+            [clj-sqs-extended.aws.s3 :as s3]
+            [clj-sqs-extended.internal.serdes :as serdes])
   (:import [com.amazon.sqs.javamessaging
             AmazonSQSExtendedClient
             ExtendedClientConfiguration]
