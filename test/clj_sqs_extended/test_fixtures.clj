@@ -6,14 +6,15 @@
             [clj-sqs-extended.test-helpers :as helpers]))
 
 
-(def ^:private aws-config {:access-key   (env :aws-access-key-id)
-                           :secret-key   (env :aws-secret-access-key)
-                           :endpoint-url (env :aws-sqs-endpoint-url)
-                           :region       (env :aws-sqs-region)})
+(def aws-config {:access-key   (env :aws-access-key-id)
+                 :secret-key   (env :aws-secret-access-key)
+                 :endpoint-url (env :aws-sqs-endpoint-url)
+                 :region       (env :aws-sqs-region)})
 
 (defonce test-sqs-ext-client (atom nil))
 (defonce test-standard-queue-name (helpers/random-queue-name))
 (defonce test-fifo-queue-name (helpers/random-queue-name {:suffix ".fifo"}))
+(defonce test-bucket-name (helpers/random-bucket-name))
 
 (defn wrap-standard-queue
   [f]
@@ -43,11 +44,9 @@
 
 (defn with-test-sqs-ext-client
   [f]
-  (let [s3-client (s3/s3-client aws-config)
-        bucket-name (s3/create-bucket s3-client
-                                      (helpers/random-bucket-name))]
+  (let [s3-client (s3/s3-client aws-config)]
+    (s3/create-bucket s3-client test-bucket-name)
     (reset! test-sqs-ext-client (sqs/sqs-ext-client aws-config
-                                                    bucket-name))
+                                                    test-bucket-name))
     (f)
-    (s3/purge-bucket s3-client
-                     bucket-name)))
+    (s3/purge-bucket s3-client test-bucket-name)))

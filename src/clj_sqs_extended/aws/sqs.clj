@@ -97,11 +97,13 @@
   ([sqs-client queue-name message
     {:keys [format]
      :or   {format :transit}}]
-   (let [url (queue-name-to-url sqs-client queue-name)]
-     (->> (serdes/serialize message format)
-          (SendMessageRequest. url)
-          (.sendMessage sqs-client)
-          (.getMessageId)))))
+   (if message
+     (let [url (queue-name-to-url sqs-client queue-name)]
+       (->> (serdes/serialize message format)
+            (SendMessageRequest. url)
+            (.sendMessage sqs-client)
+            (.getMessageId)))
+     nil)))
 
 (defn send-fifo-message
   ([sqs-client queue-name message group-id]
@@ -111,17 +113,19 @@
     {:keys [format
             deduplication-id]
      :or   {format :transit}}]
-   (let [url (queue-name-to-url sqs-client queue-name)
-         request (->> (serdes/serialize message format)
-                      (SendMessageRequest. url))]
-     ;; WATCHOUT: The group ID is mandatory when sending fifo messages.
-     (doto request (.setMessageGroupId group-id))
-     (when deduplication-id
-       ;; WATCHOUT: Refer to https://docs.aws.amazon.com/AWSJavaSDK/latest/javadoc/com/amazonaws/services/sqs/model/SendMessageRequest.html#setMessageDeduplicationId-java.lang.String-
-       (doto request (.setMessageDeduplicationId deduplication-id)))
-     (->> request
-          (.sendMessage sqs-client)
-          (.getMessageId)))))
+   (if message
+     (let [url (queue-name-to-url sqs-client queue-name)
+           request (->> (serdes/serialize message format)
+                        (SendMessageRequest. url))]
+       ;; WATCHOUT: The group ID is mandatory when sending fifo messages.
+       (doto request (.setMessageGroupId group-id))
+       (when deduplication-id
+         ;; WATCHOUT: Refer to https://docs.aws.amazon.com/AWSJavaSDK/latest/javadoc/com/amazonaws/services/sqs/model/SendMessageRequest.html#setMessageDeduplicationId-java.lang.String-
+         (doto request (.setMessageDeduplicationId deduplication-id)))
+       (->> request
+            (.sendMessage sqs-client)
+            (.getMessageId)))
+     nil)))
 
 (defn delete-message
   [sqs-client queue-name message]

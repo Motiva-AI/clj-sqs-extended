@@ -7,9 +7,9 @@
             [clj-sqs-extended.internal.receive :as receive]
             [clj-sqs-extended.test-helpers :as helpers]
             [clj-sqs-extended.aws.s3 :as s3])
-  (:import (com.amazonaws
-             AmazonServiceException
-             SdkClientException)))
+  (:import [com.amazonaws
+            AmazonServiceException
+            SdkClientException]))
 
 
 (def ^:private aws-down-config {:access-key   (env :aws-access-key-id)
