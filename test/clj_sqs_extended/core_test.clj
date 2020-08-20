@@ -1,6 +1,6 @@
 (ns clj-sqs-extended.core-test
   (:require [clojure.test :refer :all]
-            [clojure.core.async :refer [chan >!! <!!]]
+            [clojure.core.async :refer [chan <!!]]
             [clj-sqs-extended.core :as sqs-ext]
             [clj-sqs-extended.internal.receive :as receive]
             [clj-sqs-extended.test-fixtures :as fixtures]
@@ -172,38 +172,57 @@
                                              fixtures/test-standard-queue-name
                                              (last test-messages-basic)
                                              {:format format})))
+          (is (clojure.core.async.impl.protocols/closed? out-chan))
           (is (nil? (<!! out-chan))))))))
 
 (deftest handle-queue-works
-  (testing "Simple case without options"
+  (let [handler-chan (chan)]
     (fixtures/with-test-standard-queue
-      (let [queue-config {:queue-name     fixtures/test-standard-queue-name
-                          :s3-bucket-name fixtures/test-bucket-name}
-            test-message (helpers/random-message-basic)
-            receive-channel (chan)
-            handler-fn (fn [message] (>!! receive-channel message))
-            stop-fn (sqs-ext/handle-queue fixtures/aws-config
-                                          queue-config
-                                          handler-fn)]
-        (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
-                                           fixtures/test-standard-queue-name
-                                           test-message)))
-        (is (= test-message (:body (<!! receive-channel))))
-        (stop-fn)))))
+      (fixtures/with-handle-queue-standard
+        handler-chan
+        {} ;; default aws options
+        {} ;; default queue options
 
-(deftest handle-queue-works-with-non-existing-queue
-  (testing "Failure case with bad options"
-    (fixtures/with-test-standard-queue
-      (let [queue-config {:queue-name     "non-existing-queue"
-                          :s3-bucket-name fixtures/test-bucket-name}
-            test-message (helpers/random-message-basic)
-            receive-channel (chan)
-            handler-fn (fn [message] (>!! receive-channel message))
-            stop-fn (sqs-ext/handle-queue fixtures/aws-config
-                                          queue-config
-                                          handler-fn)]
-        (is (thrown? QueueDoesNotExistException
-                     (sqs-ext/send-message @fixtures/test-sqs-ext-client
-                                           (:queue-name queue-config)
-                                           test-message)))
-        (stop-fn)))))
+        (testing "handle-queue can send/receive basic message"
+          (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
+                                             fixtures/test-standard-queue-name
+                                             (first test-messages-basic))))
+          (is (= (first test-messages-basic) (:body (<!! handler-chan)))))
+
+        (testing "handle-queue can send/receive message including timestamp"
+          (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
+                                             fixtures/test-standard-queue-name
+                                             test-message-with-time)))
+          (is (= test-message-with-time (:body (<!! handler-chan)))))
+
+        (testing "handle-queue can send/receive large message"
+          (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
+                                             fixtures/test-standard-queue-name
+                                             test-message-large)))
+          (is (= test-message-large (:body (<!! handler-chan)))))))))
+
+(deftest handle-queue-terminates-with-non-existing-queue
+  (testing "handle-queue terminates when non-existing queue is used"
+    (let [handler-chan (chan)]
+      (fixtures/with-test-standard-queue
+        (let [stats
+              (fixtures/with-handle-queue-standard
+                handler-chan
+                {} ;; default aws options
+                {:queue-name "non-existing-queue"})]
+          (is (contains? stats :stopped-at)))))))
+
+(deftest handle-queue-terminates-with-non-existing-bucket
+  (testing "handle-queue terminates when non-existing bucket is used"
+    (let [handler-chan (chan)]
+      (fixtures/with-test-standard-queue
+        (let [stats
+              (fixtures/with-handle-queue-standard
+                handler-chan
+                {:s3-bucket-name "non-existing-bucket"}
+                {} ;; default queue options
+                )]
+          (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
+                                             fixtures/test-standard-queue-name
+                                             test-message-large)))
+          (is (contains? stats :stopped-at)))))))
