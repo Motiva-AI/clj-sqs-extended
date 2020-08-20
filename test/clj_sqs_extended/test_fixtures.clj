@@ -60,16 +60,15 @@
                              :s3-bucket-name test-bucket-name}
                             queue-opts)
         handler-fn (fn ([message]
-                        (>!! handler-channel message))
+                        (>!! handler-chan message))
                        ([message done-fn]
-                        (>!! handler-channel message)
+                        (>!! handler-chan message)
                         (done-fn)))
         stop-fn (sqs-ext/handle-queue (merge aws-config aws-opts)
                                       queue-config
                                       handler-fn)]
     (f)
-    (stop-fn)
-    (close! handler-chan)))
+    (stop-fn)))
 
 (defmacro with-handle-queue-standard
   [handler-chan aws-opts queue-opts & body]

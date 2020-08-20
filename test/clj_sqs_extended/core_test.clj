@@ -1,6 +1,6 @@
 (ns clj-sqs-extended.core-test
   (:require [clojure.test :refer :all]
-            [clojure.core.async :refer [chan <!!]]
+            [clojure.core.async :refer [chan close! <!!]]
             [clj-sqs-extended.core :as sqs-ext]
             [clj-sqs-extended.internal.receive :as receive]
             [clj-sqs-extended.test-fixtures :as fixtures]
@@ -210,7 +210,8 @@
                 handler-chan
                 {} ;; default aws options
                 {:queue-name "non-existing-queue"})]
-          (is (contains? stats :stopped-at)))))))
+          (is (contains? stats :stopped-at))))
+      (close! handler-chan))))
 
 (deftest handle-queue-terminates-with-non-existing-bucket
   (testing "handle-queue terminates when non-existing bucket is used"
@@ -225,4 +226,5 @@
           (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
                                              fixtures/test-standard-queue-name
                                              test-message-large)))
-          (is (contains? stats :stopped-at)))))))
+          (is (contains? stats :stopped-at))))
+      (close! handler-chan))))
