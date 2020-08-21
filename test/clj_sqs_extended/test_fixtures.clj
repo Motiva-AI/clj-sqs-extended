@@ -1,6 +1,7 @@
 (ns clj-sqs-extended.test-fixtures
-  (:require [environ.core :refer [env]]
-            [clj-sqs-extended.aws.configuration :as aws]
+  (:require [clojure.core.async :refer [chan close! >!!]]
+            [environ.core :refer [env]]
+            [clj-sqs-extended.core :as sqs-ext]
             [clj-sqs-extended.aws.s3 :as s3]
             [clj-sqs-extended.aws.sqs :as sqs]
             [clj-sqs-extended.test-helpers :as helpers]))
@@ -14,6 +15,7 @@
 (defonce test-sqs-ext-client (atom nil))
 (defonce test-standard-queue-name (helpers/random-queue-name))
 (defonce test-fifo-queue-name (helpers/random-queue-name {:suffix ".fifo"}))
+(defonce test-bucket-name (helpers/random-bucket-name))
 
 (defn wrap-standard-queue
   [f]
@@ -25,7 +27,8 @@
   (sqs/delete-queue @test-sqs-ext-client
                     test-standard-queue-name))
 
-(defmacro with-test-standard-queue [& body]
+(defmacro with-test-standard-queue
+  [& body]
   `(wrap-standard-queue (fn [] ~@body)))
 
 (defn wrap-fifo-queue
@@ -38,16 +41,95 @@
   (sqs/delete-queue @test-sqs-ext-client
                     test-fifo-queue-name))
 
-(defmacro with-test-fifo-queue [& body]
+(defmacro with-test-fifo-queue
+  [& body]
   `(wrap-fifo-queue (fn [] ~@body)))
 
 (defn with-test-sqs-ext-client
   [f]
-  (let [s3-client (s3/s3-client aws-config)
-        bucket-name (s3/create-bucket s3-client
-                                      (helpers/random-bucket-name))]
+  (let [s3-client (s3/s3-client aws-config)]
+    (s3/create-bucket s3-client test-bucket-name)
     (reset! test-sqs-ext-client (sqs/sqs-ext-client aws-config
-                                                    bucket-name))
+                                                    test-bucket-name))
     (f)
-    (s3/purge-bucket s3-client
-                     bucket-name)))
+    (s3/purge-bucket s3-client test-bucket-name)))
+
+(defn wrap-handle-queue
+  [handler-chan queue-name aws-opts queue-opts f]
+  (let [queue-config (merge {:queue-name     queue-name
+                             :s3-bucket-name test-bucket-name}
+                            queue-opts)
+        handler-fn (fn ([message]
+                        (>!! handler-chan message))
+                     ([message done-fn]
+                      (>!! handler-chan message)
+                      (done-fn)))
+        stop-fn (sqs-ext/handle-queue (merge aws-config aws-opts)
+                                      queue-config
+                                      handler-fn)]
+    (f)
+    (stop-fn)))
+
+(defmacro with-handle-queue-full-opts-standard
+  [handler-chan aws-opts queue-opts & body]
+  `(wrap-handle-queue ~handler-chan
+                      test-standard-queue-name
+                      ~aws-opts
+                      ~queue-opts
+                      (fn [] ~@body)))
+
+(defmacro with-handle-queue-full-opts-fifo
+  [handler-chan aws-opts queue-opts & body]
+  `(wrap-handle-queue ~handler-chan
+                      test-fifo-queue-name
+                      ~aws-opts
+                      ~queue-opts
+                      (fn [] ~@body)))
+
+(defmacro with-handle-queue-aws-opts-standard
+  [handler-chan aws-opts & body]
+  `(wrap-handle-queue ~handler-chan
+                      test-standard-queue-name
+                      ~aws-opts
+                      {}
+                      (fn [] ~@body)))
+
+(defmacro with-handle-queue-aws-opts-fifo
+  [handler-chan aws-opts & body]
+  `(wrap-handle-queue ~handler-chan
+                      test-fifo-queue-name
+                      ~aws-opts
+                      {}
+                      (fn [] ~@body)))
+
+(defmacro with-handle-queue-queue-opts-standard
+  [handler-chan queue-opts & body]
+  `(wrap-handle-queue ~handler-chan
+                      test-standard-queue-name
+                      {}
+                      ~queue-opts
+                      (fn [] ~@body)))
+
+(defmacro with-handle-queue-queue-opts-fifo
+  [handler-chan queue-opts & body]
+  `(wrap-handle-queue ~handler-chan
+                      test-fifo-queue-name
+                      {}
+                      ~queue-opts
+                      (fn [] ~@body)))
+
+(defmacro with-handle-queue-standard
+  [handler-chan & body]
+  `(wrap-handle-queue ~handler-chan
+                      test-standard-queue-name
+                      {}
+                      {}
+                      (fn [] ~@body)))
+
+(defmacro with-handle-queue-fifo
+  [handler-chan & body]
+  `(wrap-handle-queue ~handler-chan
+                      test-fifo-queue-name
+                      {}
+                      {}
+                      (fn [] ~@body)))

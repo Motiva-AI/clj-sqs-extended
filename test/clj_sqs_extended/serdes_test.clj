@@ -20,6 +20,17 @@
                (serdes/serialize message :transit)
                :transit))))))
 
+(deftest nil-handled-properly
+  (testing "(De)serializing nil"
+    (is (= nil
+           (serdes/deserialize
+             (serdes/serialize nil :transit)
+             :transit)))
+    (is (= nil
+           (serdes/deserialize
+             (serdes/serialize nil :json)
+             :json)))))
+
 (deftest roundtrip-json-basic
   (testing "JSON roundtrip with a basic message"
     (let [message (helpers/random-message-basic)]

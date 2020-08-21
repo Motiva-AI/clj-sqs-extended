@@ -71,16 +71,20 @@
 
 (defn serialize
   [out format]
-  (cond
-    (= format :transit) (transit-write out)
-    (= format :json) (json/generate-string out)
-    (= format :raw) out
-    :else (throw (unsupported-format-exception format))))
+  (if out
+    (cond
+      (= format :transit) (transit-write out)
+      (= format :json) (json/generate-string out)
+      (= format :raw) out
+      :else (throw (unsupported-format-exception format)))
+    nil))
 
 (defn deserialize
   [in format]
-  (cond
-    (= format :transit) (transit-read in)
-    (= format :json) (json/parse-string in true)
-    (= format :raw) in
-    :else (throw (unsupported-format-exception format))))
+  (if in
+    (cond
+      (= format :transit) (transit-read in)
+      (= format :json) (json/parse-string in true)
+      (= format :raw) in
+      :else (throw (unsupported-format-exception format)))
+    nil))

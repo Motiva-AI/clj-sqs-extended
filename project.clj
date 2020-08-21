@@ -23,9 +23,8 @@
                    :test-paths []
                    :resource-paths ["dev/resources"]
 
-                   :dependencies [[circleci/bond "0.4.0"]
+                   :dependencies [[org.clojure/tools.namespace "1.0.0"]
                                   [circleci/circleci.test "0.4.3"]
-                                  [org.clojure/tools.namespace "1.0.0"]
                                   [environ "1.2.0"]]
 
                    :plugins [[lein-environ "1.2.0"]]
