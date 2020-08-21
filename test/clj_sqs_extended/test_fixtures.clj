@@ -55,24 +55,173 @@
     (s3/purge-bucket s3-client test-bucket-name)))
 
 (defn wrap-handle-queue-standard
-  [handler-chan aws-opts queue-opts f]
-  (let [queue-config (merge {:queue-name     test-standard-queue-name
-                             :s3-bucket-name test-bucket-name}
-                            queue-opts)
+  [handler-chan f]
+  (let [queue-config {:queue-name     test-standard-queue-name
+                      :s3-bucket-name test-bucket-name}
         handler-fn (fn ([message]
                         (>!! handler-chan message))
-                       ([message done-fn]
-                        (>!! handler-chan message)
-                        (done-fn)))
-        stop-fn (sqs-ext/handle-queue (merge aws-config aws-opts)
+                     ([message done-fn]
+                      (>!! handler-chan message)
+                      (done-fn)))
+        stop-fn (sqs-ext/handle-queue aws-config
                                       queue-config
                                       handler-fn)]
     (f)
     (stop-fn)))
 
 (defmacro with-handle-queue-standard
-  [handler-chan aws-opts queue-opts & body]
+  [handler-chan & body]
   `(wrap-handle-queue-standard ~handler-chan
-                               ~aws-opts
-                               ~queue-opts
                                (fn [] ~@body)))
+
+(defn wrap-handle-queue-standard-aws-opts
+  [handler-chan aws-opts f]
+  (let [queue-config {:queue-name     test-standard-queue-name
+                      :s3-bucket-name test-bucket-name}
+        handler-fn (fn ([message]
+                        (>!! handler-chan message))
+                     ([message done-fn]
+                      (>!! handler-chan message)
+                      (done-fn)))
+        stop-fn (sqs-ext/handle-queue (merge aws-config aws-opts)
+                                      queue-config
+                                      handler-fn)]
+    (f)
+    (stop-fn)))
+
+(defmacro with-handle-queue-standard-aws-opts
+  [handler-chan aws-opts & body]
+  `(wrap-handle-queue-standard-aws-opts ~handler-chan
+                                        ~aws-opts
+                                        (fn [] ~@body)))
+
+(defn wrap-handle-queue-standard-queue-opts
+  [handler-chan queue-opts f]
+  (let [queue-config (merge {:queue-name     test-standard-queue-name
+                             :s3-bucket-name test-bucket-name}
+                            queue-opts)
+        handler-fn (fn ([message]
+                        (>!! handler-chan message))
+                     ([message done-fn]
+                      (>!! handler-chan message)
+                      (done-fn)))
+        stop-fn (sqs-ext/handle-queue aws-config
+                                      queue-config
+                                      handler-fn)]
+    (f)
+    (stop-fn)))
+
+(defmacro with-handle-queue-standard-queue-opts
+  [handler-chan queue-opts & body]
+  `(wrap-handle-queue-standard-queue-opts ~handler-chan
+                                          ~queue-opts
+                                          (fn [] ~@body)))
+
+(defn wrap-handle-queue-standard-full-opts
+  [handler-chan aws-opts queue-opts f]
+  (let [queue-config (merge {:queue-name     test-standard-queue-name
+                             :s3-bucket-name test-bucket-name}
+                            queue-opts)
+        handler-fn (fn ([message]
+                        (>!! handler-chan message))
+                     ([message done-fn]
+                      (>!! handler-chan message)
+                      (done-fn)))
+        stop-fn (sqs-ext/handle-queue (merge aws-config aws-opts)
+                                      queue-config
+                                      handler-fn)]
+    (f)
+    (stop-fn)))
+
+(defmacro with-handle-queue-standard-full-opts
+  [handler-chan aws-opts queue-opts & body]
+  `(wrap-handle-queue-standard-full-opts ~handler-chan
+                                         ~aws-opts
+                                         ~queue-opts
+                                         (fn [] ~@body)))
+
+(defn wrap-handle-queue-fifo
+  [handler-chan f]
+  (let [queue-config {:queue-name     test-fifo-queue-name
+                      :s3-bucket-name test-bucket-name}
+        handler-fn (fn ([message]
+                        (>!! handler-chan message))
+                     ([message done-fn]
+                      (>!! handler-chan message)
+                      (done-fn)))
+        stop-fn (sqs-ext/handle-queue aws-config
+                                      queue-config
+                                      handler-fn)]
+    (f)
+    (stop-fn)))
+
+(defmacro with-handle-queue-fifo
+  [handler-chan & body]
+  `(wrap-handle-queue-fifo ~handler-chan
+                           (fn [] ~@body)))
+
+(defn wrap-handle-queue-fifo-aws-opts
+  [handler-chan aws-opts f]
+  (let [queue-config {:queue-name     test-fifo-queue-name
+                      :s3-bucket-name test-bucket-name}
+        handler-fn (fn ([message]
+                        (>!! handler-chan message))
+                     ([message done-fn]
+                      (>!! handler-chan message)
+                      (done-fn)))
+        stop-fn (sqs-ext/handle-queue (merge aws-config aws-opts)
+                                      queue-config
+                                      handler-fn)]
+    (f)
+    (stop-fn)))
+
+(defmacro with-handle-queue-fifo-aws-opts
+  [handler-chan aws-opts & body]
+  `(wrap-handle-queue-fifo-aws-opts ~handler-chan
+                                    ~aws-opts
+                                    (fn [] ~@body)))
+
+(defn wrap-handle-queue-fifo-queue-opts
+  [handler-chan queue-opts f]
+  (let [queue-config (merge {:queue-name     test-fifo-queue-name
+                             :s3-bucket-name test-bucket-name}
+                            queue-opts)
+        handler-fn (fn ([message]
+                        (>!! handler-chan message))
+                     ([message done-fn]
+                      (>!! handler-chan message)
+                      (done-fn)))
+        stop-fn (sqs-ext/handle-queue aws-config
+                                      queue-config
+                                      handler-fn)]
+    (f)
+    (stop-fn)))
+
+(defmacro with-handle-queue-fifo-queue-opts
+  [handler-chan queue-opts & body]
+  `(wrap-handle-queue-fifo-queue-opts ~handler-chan
+                                      ~queue-opts
+                                      (fn [] ~@body)))
+
+(defn wrap-handle-queue-fifo-full-opts
+  [handler-chan aws-opts queue-opts f]
+  (let [queue-config (merge {:queue-name     test-fifo-queue-name
+                             :s3-bucket-name test-bucket-name}
+                            queue-opts)
+        handler-fn (fn ([message]
+                        (>!! handler-chan message))
+                     ([message done-fn]
+                      (>!! handler-chan message)
+                      (done-fn)))
+        stop-fn (sqs-ext/handle-queue (merge aws-config aws-opts)
+                                      queue-config
+                                      handler-fn)]
+    (f)
+    (stop-fn)))
+
+(defmacro with-handle-queue-fifo-full-opts
+  [handler-chan aws-opts queue-opts & body]
+  `(wrap-handle-queue-fifo-full-opts ~handler-chan
+                                     ~aws-opts
+                                     ~queue-opts
+                                     (fn [] ~@body)))

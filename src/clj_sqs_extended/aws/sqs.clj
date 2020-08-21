@@ -3,7 +3,8 @@
             [clojure.core.async.impl.protocols :as async-protocols]
             [clj-sqs-extended.aws.configuration :as aws]
             [clj-sqs-extended.aws.s3 :as s3]
-            [clj-sqs-extended.internal.serdes :as serdes])
+            [clj-sqs-extended.internal.serdes :as serdes]
+            [clojure.tools.logging :as log])
   (:import [com.amazon.sqs.javamessaging
             AmazonSQSExtendedClient
             ExtendedClientConfiguration]
@@ -97,13 +98,11 @@
   ([sqs-client queue-name message
     {:keys [format]
      :or   {format :transit}}]
-   (if message
-     (let [url (queue-name-to-url sqs-client queue-name)]
-       (->> (serdes/serialize message format)
-            (SendMessageRequest. url)
-            (.sendMessage sqs-client)
-            (.getMessageId)))
-     nil)))
+   (let [url (queue-name-to-url sqs-client queue-name)]
+     (->> (serdes/serialize message format)
+          (SendMessageRequest. url)
+          (.sendMessage sqs-client)
+          (.getMessageId)))))
 
 (defn send-fifo-message
   ([sqs-client queue-name message group-id]
@@ -113,22 +112,21 @@
     {:keys [format
             deduplication-id]
      :or   {format :transit}}]
-   (if message
-     (let [url (queue-name-to-url sqs-client queue-name)
-           request (->> (serdes/serialize message format)
-                        (SendMessageRequest. url))]
-       ;; WATCHOUT: The group ID is mandatory when sending fifo messages.
-       (doto request (.setMessageGroupId group-id))
-       (when deduplication-id
-         ;; WATCHOUT: Refer to https://docs.aws.amazon.com/AWSJavaSDK/latest/javadoc/com/amazonaws/services/sqs/model/SendMessageRequest.html#setMessageDeduplicationId-java.lang.String-
-         (doto request (.setMessageDeduplicationId deduplication-id)))
-       (->> request
-            (.sendMessage sqs-client)
-            (.getMessageId)))
-     nil)))
+   (let [url (queue-name-to-url sqs-client queue-name)
+         request (->> (serdes/serialize message format)
+                      (SendMessageRequest. url))]
+     ;; WATCHOUT: The group ID is mandatory when sending fifo messages.
+     (doto request (.setMessageGroupId group-id))
+     (when deduplication-id
+       ;; WATCHOUT: Refer to https://docs.aws.amazon.com/AWSJavaSDK/latest/javadoc/com/amazonaws/services/sqs/model/SendMessageRequest.html#setMessageDeduplicationId-java.lang.String-
+       (doto request (.setMessageDeduplicationId deduplication-id)))
+     (->> request
+          (.sendMessage sqs-client)
+          (.getMessageId)))))
 
 (defn delete-message
   [sqs-client queue-name message]
+  (log/infof "DELETE MESSAGE %s %s" queue-name message)
   (let [url (queue-name-to-url sqs-client queue-name)]
     (->> (DeleteMessageRequest. url (:receiptHandle message))
          (.deleteMessage sqs-client))))
