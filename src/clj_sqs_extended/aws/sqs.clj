@@ -3,8 +3,7 @@
             [clojure.core.async.impl.protocols :as async-protocols]
             [clj-sqs-extended.aws.configuration :as aws]
             [clj-sqs-extended.aws.s3 :as s3]
-            [clj-sqs-extended.internal.serdes :as serdes]
-            [clojure.tools.logging :as log])
+            [clj-sqs-extended.internal.serdes :as serdes])
   (:import [com.amazon.sqs.javamessaging
             AmazonSQSExtendedClient
             ExtendedClientConfiguration]
@@ -126,7 +125,6 @@
 
 (defn delete-message
   [sqs-client queue-name message]
-  (log/infof "DELETE MESSAGE %s %s" queue-name message)
   (let [url (queue-name-to-url sqs-client queue-name)]
     (->> (DeleteMessageRequest. url (:receiptHandle message))
          (.deleteMessage sqs-client))))

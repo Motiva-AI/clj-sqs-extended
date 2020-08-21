@@ -50,7 +50,7 @@
   (doseq [format [:transit :json]]
     (let [handler-chan (chan)]
       (fixtures/with-test-standard-queue
-        (fixtures/with-handle-queue-standard-queue-opts
+        (fixtures/with-handle-queue-queue-opts-standard
           handler-chan
           {:format format}
 
@@ -85,7 +85,7 @@
     (doseq [format [:transit :json]]
       (let [handler-chan (chan)]
         (fixtures/with-test-fifo-queue
-          (fixtures/with-handle-queue-fifo-queue-opts
+          (fixtures/with-handle-queue-queue-opts-fifo
             handler-chan
             {:format format}
 
@@ -104,7 +104,7 @@
     (let [handler-chan (chan)]
       (fixtures/with-test-standard-queue
         (let [stats
-              (fixtures/with-handle-queue-standard-queue-opts
+              (fixtures/with-handle-queue-queue-opts-standard
                 handler-chan
                 {:queue-name "non-existing-queue"})]
 
@@ -116,7 +116,7 @@
     (let [handler-chan (chan)]
       (fixtures/with-test-standard-queue
         (let [stats
-              (fixtures/with-handle-queue-standard-aws-opts
+              (fixtures/with-handle-queue-aws-opts-standard
                 handler-chan
                 {:s3-bucket-name "non-existing-bucket"})]
 
@@ -155,7 +155,7 @@
     (doseq [format [:transit]]
       (let [handler-chan (chan)]
         (fixtures/with-test-standard-queue
-          (fixtures/with-handle-queue-standard-queue-opts
+          (fixtures/with-handle-queue-queue-opts-standard
             handler-chan
             {:format format
              :auto-delete false}
@@ -175,7 +175,7 @@
     (doseq [format [:transit :json]]
       (let [handler-chan (chan)]
         (fixtures/with-test-standard-queue
-          (fixtures/with-handle-queue-standard-queue-opts
+          (fixtures/with-handle-queue-queue-opts-standard
             handler-chan
             {:format format
              :auto-delete true}
