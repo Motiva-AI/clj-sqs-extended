@@ -56,7 +56,7 @@
     (s3/purge-bucket s3-client test-bucket-name)))
 
 (defn wrap-handle-queue
-  [handler-chan queue-name aws-opts queue-opts f]
+  [handler-chan queue-name auto-stop aws-opts queue-opts f]
   (let [queue-config (merge {:queue-name     queue-name
                              :s3-bucket-name test-bucket-name}
                             queue-opts)
@@ -69,28 +69,15 @@
                                       queue-config
                                       handler-fn)]
     (f)
-    (stop-fn)))
-
-(defn wrap-handle-queue-no-stop
-  [handler-chan queue-name aws-opts queue-opts f]
-  (let [queue-config (merge {:queue-name     queue-name
-                             :s3-bucket-name test-bucket-name}
-                            queue-opts)
-        handler-fn (fn ([message]
-                        (>!! handler-chan message))
-                     ([message done-fn]
-                      (>!! handler-chan message)
-                      (done-fn)))
-        stop-fn (sqs-ext/handle-queue (merge aws-config aws-opts)
-                                      queue-config
-                                      handler-fn)]
-    (f)
-    stop-fn))
+    (if auto-stop
+      (stop-fn)
+      stop-fn)))
 
 (defmacro with-handle-queue-full-opts-standard
   [handler-chan aws-opts queue-opts & body]
   `(wrap-handle-queue ~handler-chan
                       test-standard-queue-name
+                      true
                       ~aws-opts
                       ~queue-opts
                       (fn [] ~@body)))
@@ -99,6 +86,7 @@
   [handler-chan aws-opts queue-opts & body]
   `(wrap-handle-queue ~handler-chan
                       test-fifo-queue-name
+                      true
                       ~aws-opts
                       ~queue-opts
                       (fn [] ~@body)))
@@ -107,6 +95,7 @@
   [handler-chan aws-opts & body]
   `(wrap-handle-queue ~handler-chan
                       test-standard-queue-name
+                      true
                       ~aws-opts
                       {}
                       (fn [] ~@body)))
@@ -115,6 +104,7 @@
   [handler-chan aws-opts & body]
   `(wrap-handle-queue ~handler-chan
                       test-fifo-queue-name
+                      true
                       ~aws-opts
                       {}
                       (fn [] ~@body)))
@@ -123,6 +113,16 @@
   [handler-chan queue-opts & body]
   `(wrap-handle-queue ~handler-chan
                       test-standard-queue-name
+                      true
+                      {}
+                      ~queue-opts
+                      (fn [] ~@body)))
+
+(defmacro with-handle-queue-queue-opts-standard-no-autostop
+  [handler-chan queue-opts & body]
+  `(wrap-handle-queue ~handler-chan
+                      test-standard-queue-name
+                      false
                       {}
                       ~queue-opts
                       (fn [] ~@body)))
@@ -131,6 +131,7 @@
   [handler-chan queue-opts & body]
   `(wrap-handle-queue ~handler-chan
                       test-fifo-queue-name
+                      true
                       {}
                       ~queue-opts
                       (fn [] ~@body)))
@@ -139,22 +140,16 @@
   [handler-chan & body]
   `(wrap-handle-queue ~handler-chan
                       test-standard-queue-name
+                      true
                       {}
                       {}
                       (fn [] ~@body)))
-
-(defmacro with-handle-queue-standard-no-stop
-  [handler-chan & body]
-  `(wrap-handle-queue-no-stop ~handler-chan
-                              test-standard-queue-name
-                              {}
-                              {}
-                              (fn [] ~@body)))
 
 (defmacro with-handle-queue-fifo
   [handler-chan & body]
   `(wrap-handle-queue ~handler-chan
                       test-fifo-queue-name
+                      true
                       {}
                       {}
                       (fn [] ~@body)))

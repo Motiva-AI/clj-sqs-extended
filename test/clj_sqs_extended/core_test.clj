@@ -117,12 +117,14 @@
     (let [handler-chan (chan)]
       (fixtures/with-test-standard-queue
         (with-redefs-fn {#'sqs/receive-message
-                         (fn [_ _ _] (ex-info "Bam!" {:cause "wtf"}))}
-          #(let [stop-fn (fixtures/with-handle-queue-standard-no-stop
-                          handler-chan)]
-             (Thread/sleep 3000)
+                         (fn [_ _ _] (ex-info "Something just went wrong!"
+                                              {:cause "unknown"}))}
+          #(let [stop-fn (fixtures/with-handle-queue-queue-opts-standard-no-autostop
+                          handler-chan
+                          {:restart-limit 3})]
+             (Thread/sleep 3500)
              (let [stats (stop-fn)]
-               (is (= (:restart-count stats) 10))))))
+               (is (= (:restart-count stats) 3))))))
       (close! handler-chan))))
 
 (deftest handle-queue-terminates-with-non-existing-bucket
