@@ -158,8 +158,11 @@
   [sqs-client queue-name opts]
   (let [ch (chan)]
     (go-loop []
-      (let [message (receive-message sqs-client queue-name opts)]
-        (>! ch message))
+      (try
+        (let [message (receive-message sqs-client queue-name opts)]
+          (>! ch message))
+        (catch Throwable e
+          (>! ch e)))
       (when-not (async-protocols/closed? ch)
         (recur)))
     ch))

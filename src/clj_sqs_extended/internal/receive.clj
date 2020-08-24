@@ -32,20 +32,6 @@
                   (secs-between (-> loop-state :stats :started-at)
                                 now)))))
 
-(defn- restart-receive-loop
-  [sqs-ext-client loop-state receive-opts]
-  (log/infof "Restarting receive-loop for queue '%s'" (:queue-name @loop-state))
-  (let [old-in-chan (:in-chan @loop-state)]
-    (swap! loop-state
-           (fn [state]
-             (-> state
-                 (assoc :in-chan (sqs/receive-message-channeled sqs-ext-client
-                                                                (:queue-name @loop-state)
-                                                                receive-opts))
-                 (update-in [:stats :restart-count] inc)
-                 (assoc-in [:stats :restarted-at] (t/now)))))
-    (close! old-in-chan)))
-
 (defn- stop-receive-loop
   [loop-state]
   (when (:running @loop-state)
@@ -56,6 +42,28 @@
     (close! (:out-chan @loop-state))
     (:stats @loop-state)))
 
+(defn- restart-receive-loop
+  [sqs-ext-client loop-state receive-opts]
+  (let [limit (:restart-limit receive-opts)
+        count (get-in @loop-state [:stats :restart-count])]
+   (if (< count limit)
+     (do
+       (log/infof "Restarting receive-loop (%d/%d) for queue '%s'"
+                  count
+                  limit
+                  (:queue-name @loop-state))
+       (let [old-in-chan (:in-chan @loop-state)]
+         (swap! loop-state
+                (fn [state]
+                  (-> state
+                      (assoc :in-chan (sqs/receive-message-channeled sqs-ext-client
+                                                                     (:queue-name @loop-state)
+                                                                     receive-opts))
+                      (update-in [:stats :restart-count] inc)
+                      (assoc-in [:stats :restarted-at] (t/now)))))
+         (close! old-in-chan)))
+     (stop-receive-loop @loop-state))))
+
 (defn- handle-message-receival-error
   [sqs-ext-client loop-state error restart-delay-seconds receive-opts]
   (let [{:keys [this-pass-started-at] :as stats} (:stats @loop-state)]
@@ -63,10 +71,6 @@
               (assoc stats :last-wait-duration
                            (secs-between this-pass-started-at
                                          (t/now))))
-    ;; WATCHOUT: Adding a restart delay so that this doesn't go into an
-    ;;           abusively tight loop if the queue listener is failing to
-    ;;           start continuously.
-    (<! (timeout (int (* restart-delay-seconds 1000))))
     (restart-receive-loop sqs-ext-client
                           loop-state
                           receive-opts)))
@@ -94,10 +98,12 @@
   ([sqs-ext-client queue-name out-chan
     {:keys [auto-delete
             restart-delay-seconds
+            restart-limit
             format
             num-consumers]
      :or   {auto-delete           true
             restart-delay-seconds 1
+            restart-limit         10
             format                :transit
             num-consumers         1}
      :as   receive-opts}]

@@ -1,10 +1,11 @@
 (ns clj-sqs-extended.core-test
   (:require [clojure.test :refer :all]
-            [clojure.core.async :refer [chan close! <!!]]
+            [clojure.core.async :refer [chan close! <!! >!!]]
             [clj-sqs-extended.core :as sqs-ext]
             [clj-sqs-extended.internal.receive :as receive]
             [clj-sqs-extended.test-fixtures :as fixtures]
-            [clj-sqs-extended.test-helpers :as helpers])
+            [clj-sqs-extended.test-helpers :as helpers]
+            [clj-sqs-extended.aws.sqs :as sqs])
   (:import (com.amazonaws.services.sqs.model QueueDoesNotExistException)))
 
 
@@ -111,6 +112,19 @@
           (is (contains? stats :stopped-at))))
       (close! handler-chan))))
 
+(deftest handle-queue-terminates-after-restart-count-exceeded
+  (testing "handle-queue terminates when the restart-count exceeds the limit"
+    (let [handler-chan (chan)]
+      (fixtures/with-test-standard-queue
+        (with-redefs-fn {#'sqs/receive-message
+                         (fn [_ _ _] (ex-info "Bam!" {:cause "wtf"}))}
+          #(let [stop-fn (fixtures/with-handle-queue-standard-no-stop
+                          handler-chan)]
+             (Thread/sleep 3000)
+             (let [stats (stop-fn)]
+               (is (= (:restart-count stats) 10))))))
+      (close! handler-chan))))
+
 (deftest handle-queue-terminates-with-non-existing-bucket
   (testing "handle-queue terminates when non-existing bucket is used"
     (let [handler-chan (chan)]
@@ -157,7 +171,7 @@
         (fixtures/with-test-standard-queue
           (fixtures/with-handle-queue-queue-opts-standard
             handler-chan
-            {:format format
+            {:format      format
              :auto-delete false}
 
             (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
@@ -177,7 +191,7 @@
         (fixtures/with-test-standard-queue
           (fixtures/with-handle-queue-queue-opts-standard
             handler-chan
-            {:format format
+            {:format      format
              :auto-delete true}
 
             (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client

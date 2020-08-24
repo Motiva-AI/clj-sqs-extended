@@ -41,9 +41,11 @@
    {:keys [queue-name
            s3-bucket-name
            num-handler-threads
+           restart-limit
            auto-delete
            format]
     :or   {num-handler-threads 4
+           restart-limit       10
            auto-delete         true
            format              :transit}}
    handler-fn]
@@ -52,8 +54,9 @@
         stop-fn (receive/receive-loop sqs-ext-client
                                       queue-name
                                       receive-chan
-                                      {:auto-delete auto-delete
-                                       :format      format})]
+                                      {:auto-delete   auto-delete
+                                       :restart-limit restart-limit
+                                       :format        format})]
     (log/infof (str "Now handling queue '%s' with:\n"
                     "  num-handler-threads: %d\n"
                     "  auto-delete: %s\n"
