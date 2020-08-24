@@ -9,7 +9,7 @@
 
 (defn s3-client
   [aws-config]
-  (let [endpoint (aws/configure-endpoint aws-config)
+  (let [endpoint (aws/configure-s3-endpoint aws-config)
         creds (aws/configure-credentials aws-config)]
     (let [builder (-> (AmazonS3ClientBuilder/standard)
                       (.withPathStyleAccessEnabled true))

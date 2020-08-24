@@ -18,7 +18,7 @@
 
 (defn sqs-ext-client
   [aws-config & [s3-bucket-name]]
-  (let [endpoint (aws/configure-endpoint aws-config)
+  (let [endpoint (aws/configure-sqs-endpoint aws-config)
         creds (aws/configure-credentials aws-config)
         s3-client (when (some? s3-bucket-name) (s3/s3-client aws-config))
         sqs-config (if s3-client
