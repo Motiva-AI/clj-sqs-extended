@@ -1,25 +1,31 @@
 (ns clj-sqs-extended.aws.configuration
   (:import [com.amazonaws.auth
             AWSStaticCredentialsProvider
-            BasicAWSCredentials]
+            BasicAWSCredentials
+            DefaultAWSCredentialsProviderChain]
            [com.amazonaws.client.builder
             AwsClientBuilder$EndpointConfiguration]))
 
 
-(defn configure-endpoint
-  [{:keys [endpoint-url region]}]
+(defn configure-sqs-endpoint
+  [{:keys [aws-sqs-endpoint-url aws-region]}]
   ;; WATCHOUT: A specific endpoint is optional in this API, so if the necessary
   ;;           information does not get passed here, this will return nil
   ;;           and the API will use the default endpoint instead.
-  (when (and (some? endpoint-url) (some? region))
-    (AwsClientBuilder$EndpointConfiguration. endpoint-url region)))
+  (when (and (some? aws-sqs-endpoint-url) (some? aws-region))
+    (AwsClientBuilder$EndpointConfiguration. aws-sqs-endpoint-url aws-region)))
+
+(defn configure-s3-endpoint
+  [{:keys [aws-s3-endpoint-url aws-region]}]
+  ;; WATCHOUT: A specific endpoint is optional in this API, so if the necessary
+  ;;           information does not get passed here, this will return nil
+  ;;           and the API will use the default endpoint instead.
+  (when (and (some? aws-s3-endpoint-url) (some? aws-region))
+    (AwsClientBuilder$EndpointConfiguration. aws-s3-endpoint-url aws-region)))
 
 (defn configure-credentials
-  [{:keys [access-key secret-key]}]
-  ;; WATCHOUT: Credentials are optional in this API, so if the necessary
-  ;;           information does not get passed here, this will return nil
-  ;;           and the API will use the standard methods for finding the
-  ;;           credentials to use instead.
-  (when (and (some? access-key) (some? secret-key))
-    (->> (BasicAWSCredentials. access-key secret-key)
-         (AWSStaticCredentialsProvider.))))
+  [{:keys [aws-access-key-id aws-secret-access-key]}]
+  (if (and (some? aws-access-key-id ) (some? aws-secret-access-key))
+    (->> (BasicAWSCredentials. aws-access-key-id  aws-secret-access-key)
+         (AWSStaticCredentialsProvider.))
+    (DefaultAWSCredentialsProviderChain.)))
