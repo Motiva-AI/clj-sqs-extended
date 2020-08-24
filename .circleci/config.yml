@@ -21,9 +21,9 @@ jobs:
 
       - restore_cache:
           keys:
-          - v4-clj-sqs-extended-{{ checksum "project.clj" }}
+          - v1-clj-sqs-extended-library-wrapper-{{ checksum "project.clj" }}
           # fallback to using the latest cache if no exact match is found
-          - v4-clj-sqs-extended-
+          - v1-clj-sqs-extended-library-wrapper-
 
       - run:
           name: Install dependencies
@@ -56,4 +56,4 @@ jobs:
             - ~/dockerize
             - ~/.m2
             - .cpcache
-          key: v4-clj-sqs-extended-{{ checksum "project.clj" }}
+          key: v1-clj-sqs-extended-library-wrapper-{{ checksum "project.clj" }}
