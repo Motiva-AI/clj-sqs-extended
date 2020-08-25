@@ -1,12 +1,13 @@
 (ns clj-sqs-extended.core-test
   (:require [clojure.test :refer :all]
-            [clojure.core.async :refer [chan close! <!! >!!]]
+            [clojure.core.async :refer [chan close! <!!]]
             [clj-sqs-extended.core :as sqs-ext]
             [clj-sqs-extended.internal.receive :as receive]
             [clj-sqs-extended.test-fixtures :as fixtures]
             [clj-sqs-extended.test-helpers :as helpers]
             [clj-sqs-extended.aws.sqs :as sqs])
-  (:import (com.amazonaws.services.sqs.model QueueDoesNotExistException)))
+  (:import [com.amazonaws.services.sqs.model QueueDoesNotExistException]
+           [java.net.http HttpTimeoutException]))
 
 
 (use-fixtures :once fixtures/with-test-sqs-ext-client)
@@ -117,14 +118,29 @@
     (let [handler-chan (chan)]
       (fixtures/with-test-standard-queue
         (with-redefs-fn {#'sqs/receive-message
-                         (fn [_ _ _] (ex-info "Something just went wrong!"
-                                              {:cause "unknown"}))}
+                         (fn [_ _ _] (HttpTimeoutException.
+                                       "Something seems to be wrong with the network."))}
           #(let [stop-fn (fixtures/with-handle-queue-queue-opts-standard-no-autostop
-                          handler-chan
-                          {:restart-limit 3})]
+                           handler-chan
+                           {:restart-limit         3
+                            :restart-delay-seconds 1})]
              (Thread/sleep 3500)
              (let [stats (stop-fn)]
                (is (= (:restart-count stats) 3))))))
+      (close! handler-chan))))
+
+(deftest handle-queue-terminates-upon-unrecoverable-error-occured
+  (testing "handle-queue terminates when an error occured that was considered fatal/unrecoverable"
+    (let [handler-chan (chan)]
+      (fixtures/with-test-standard-queue
+        (with-redefs-fn {#'sqs/receive-message
+                         (fn [_ _ _]
+                           (RuntimeException. "Something horrible just happened!"))}
+          #(let [stats (fixtures/with-handle-queue-standard
+                         handler-chan)]
+             (Thread/sleep 1000)
+             (is (= (:restart-count stats) 0))
+             (is (contains? stats :stopped-at)))))
       (close! handler-chan))))
 
 (deftest handle-queue-terminates-with-non-existing-bucket

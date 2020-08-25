@@ -2,10 +2,8 @@
   (:require [clojure.test :refer :all]
             [clojure.core.async :refer [chan <!!]]
             [environ.core :refer [env]]
-            [clj-sqs-extended.aws.s3 :as s3]
             [clj-sqs-extended.aws.sqs :as sqs]
             [clj-sqs-extended.core :as sqs-ext]
-            [clj-sqs-extended.internal.receive :as receive]
             [clj-sqs-extended.test-helpers :as helpers])
   (:import [com.amazonaws
             AmazonServiceException

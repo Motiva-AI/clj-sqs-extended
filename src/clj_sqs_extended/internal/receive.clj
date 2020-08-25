@@ -1,8 +1,13 @@
 (ns clj-sqs-extended.internal.receive
-  (:require [clojure.core.async :refer [chan go go-loop close! timeout <! >!]]
+  (:require [clojure.core.async :refer [chan go go-loop close! <! >!]]
             [clojure.tools.logging :as log]
             [tick.alpha.api :as t]
-            [clj-sqs-extended.aws.sqs :as sqs]))
+            [clj-sqs-extended.aws.sqs :as sqs])
+  (:import [java.lang ReflectiveOperationException]
+           [java.net
+            SocketException
+            UnknownHostException]
+           [java.net.http HttpTimeoutException]))
 
 
 (defn- secs-between
@@ -40,8 +45,8 @@
     (swap! loop-state assoc :running false)
     (swap! loop-state assoc-in [:stats :stopped-at] (t/now))
     (close! (:in-chan @loop-state))
-    (close! (:out-chan @loop-state))
-    (:stats @loop-state)))
+    (close! (:out-chan @loop-state)))
+  (:stats @loop-state))
 
 (defn- restart-receive-loop
   [sqs-ext-client loop-state receive-opts]
@@ -61,25 +66,30 @@
 
 (defn- error-might-be-recovered-by-restarting
   [error]
-  ;; TODO: Depending on the type of error return true if we think we can
-  ;;       recover from this, or false if its game over.
-  true)
+  (cond
+    (instance? ReflectiveOperationException error) false
+    (instance? RuntimeException error) false
+    (instance? UnknownHostException error) true
+    (instance? SocketException error) true
+    (instance? UnknownHostException error) true
+    (instance? HttpTimeoutException error) true
+    :else false))
 
 (defn- handle-message-receival-error
   [sqs-ext-client loop-state error restart-delay-seconds receive-opts]
-  (log/warnf error "Error while receiving message:")
   (if (error-might-be-recovered-by-restarting error)
     (let [count (get-in @loop-state [:stats :restart-count])]
       (if (< count (:restart-limit receive-opts))
         (do
+          (log/warnf error "Error occured while receiving message!")
           (Thread/sleep (* 1000 restart-delay-seconds))
           (restart-receive-loop sqs-ext-client
                                 loop-state
                                 receive-opts))
         (log/warnf "Skipping receive-loop restart because the limit (%d) has been reached!"
-                    count)))
+                   count)))
     (do
-      (log/fatalf "An unrecovereable error occured!")
+      (log/fatalf error "Unrecovereable error occured while receiving message!")
       (stop-receive-loop loop-state))))
 
 (defn- process-message
@@ -103,15 +113,7 @@
 
   ([sqs-ext-client queue-name out-chan
     {:keys [auto-delete
-            restart-delay-seconds
-            restart-limit
-            format
-            num-consumers]
-     :or   {auto-delete           true
-            restart-delay-seconds 1
-            restart-limit         10
-            format                :transit
-            num-consumers         1}
+            restart-delay-seconds]
      :as   receive-opts}]
    (let [loop-state (init-receive-loop-state sqs-ext-client
                                              queue-name
@@ -140,6 +142,8 @@
 
        (if (:running @loop-state)
          (recur)
-         (log/infof "Receive-loop terminated for %s" (:stats @loop-state))))
+         (log/infof "Receive-loop terminated for %s"
+                    (:stats @loop-state))))
 
      (partial stop-receive-loop loop-state))))
+

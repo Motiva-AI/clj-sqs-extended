@@ -145,6 +145,15 @@
                       {}
                       (fn [] ~@body)))
 
+(defmacro with-handle-queue-standard-no-autostop
+  [handler-chan & body]
+  `(wrap-handle-queue ~handler-chan
+                      test-standard-queue-name
+                      false
+                      {}
+                      {}
+                      (fn [] ~@body)))
+
 (defmacro with-handle-queue-fifo
   [handler-chan & body]
   `(wrap-handle-queue ~handler-chan
