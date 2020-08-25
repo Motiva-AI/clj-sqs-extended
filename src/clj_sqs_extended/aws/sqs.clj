@@ -25,7 +25,7 @@
         s3-client (when (some? s3-bucket-name) (s3/s3-client aws-config))
         sqs-config (if s3-client
                      (-> (ExtendedClientConfiguration.)
-                         (.withLargePayloadSupportEnabled s3-client s3-bucket-name))
+                         (.withPayloadSupportEnabled s3-client s3-bucket-name))
                      (ExtendedClientConfiguration.))
         builder (AmazonSQSClientBuilder/standard)
         builder (if endpoint (.withEndpointConfiguration builder endpoint) builder)
