@@ -3,7 +3,8 @@
             [clojure.core.async.impl.protocols :as async-protocols]
             [clj-sqs-extended.aws.configuration :as aws]
             [clj-sqs-extended.aws.s3 :as s3]
-            [clj-sqs-extended.internal.serdes :as serdes])
+            [clj-sqs-extended.internal.serdes :as serdes]
+            [clj-sqs-extended.internal.troublemaker :as trouble])
   (:import [com.amazon.sqs.javamessaging
             AmazonSQSExtendedClient
             ExtendedClientConfiguration]
@@ -13,7 +14,8 @@
             DeleteMessageRequest
             PurgeQueueRequest
             ReceiveMessageRequest
-            SendMessageRequest]))
+            SendMessageRequest]
+           (java.net.http HttpTimeoutException)))
 
 
 (defn sqs-ext-client
@@ -138,6 +140,9 @@
             wait-time]
      :or   {format    :transit
             wait-time 0}}]
+   (trouble/debug-troublemaker :receive-message
+                               (HttpTimeoutException.
+                                 "Something seems to be wrong with the network."))
    (letfn [(extract-relevant-keys [message]
              (if message
                (-> (bean message)

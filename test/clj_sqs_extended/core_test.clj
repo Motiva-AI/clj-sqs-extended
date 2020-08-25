@@ -1,11 +1,12 @@
 (ns clj-sqs-extended.core-test
   (:require [clojure.test :refer :all]
             [clojure.core.async :refer [chan close! <!!]]
+            [clj-sqs-extended.aws.sqs :as sqs]
             [clj-sqs-extended.core :as sqs-ext]
             [clj-sqs-extended.internal.receive :as receive]
+            [clj-sqs-extended.internal.troublemaker :as trouble]
             [clj-sqs-extended.test-fixtures :as fixtures]
-            [clj-sqs-extended.test-helpers :as helpers]
-            [clj-sqs-extended.aws.sqs :as sqs])
+            [clj-sqs-extended.test-helpers :as helpers])
   (:import [com.amazonaws.services.sqs.model QueueDoesNotExistException]
            [java.net.http HttpTimeoutException]))
 
@@ -127,6 +128,31 @@
              (Thread/sleep 3500)
              (let [stats (stop-fn)]
                (is (= (:restart-count stats) 3))))))
+      (close! handler-chan))))
+
+(deftest handle-queue-restarts-after-recoverable-error-occured
+  (testing "handle-queue restarts properly and continues running upon recoverable error"
+    (let [handler-chan (chan)]
+      (fixtures/with-test-standard-queue
+        (let [stop-fn (fixtures/with-handle-queue-queue-opts-standard-no-autostop
+                        handler-chan
+                        {:restart-delay-seconds 1})]
+          ;; Cause some trouble in receive-message ...
+          (trouble/activate-troublemaker :receive-message)
+          (Thread/sleep 1500)
+
+          ;; All good again, back to work!
+          (trouble/deactivate-troublemaker :receive-message)
+          (Thread/sleep 1500)
+
+          ;; Verify that the queue is still handled properly ...
+          (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
+                                             fixtures/test-standard-queue-name
+                                             (first test-messages-basic))))
+          (is (= (first test-messages-basic) (:body (<!! handler-chan))))
+          (let [stats (stop-fn)]
+            ;; ... but receiving was actually restarted
+            (is (>= (:restart-count stats) 0)))))
       (close! handler-chan))))
 
 (deftest handle-queue-terminates-upon-unrecoverable-error-occured
