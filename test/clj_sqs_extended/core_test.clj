@@ -4,7 +4,6 @@
             [clj-sqs-extended.aws.sqs :as sqs]
             [clj-sqs-extended.core :as sqs-ext]
             [clj-sqs-extended.internal.receive :as receive]
-            [clj-sqs-extended.internal.troublemaker :as trouble]
             [clj-sqs-extended.test-fixtures :as fixtures]
             [clj-sqs-extended.test-helpers :as helpers])
   (:import [com.amazonaws.services.sqs.model QueueDoesNotExistException]
@@ -118,53 +117,69 @@
   (testing "handle-queue terminates when the restart-count exceeds the limit"
     (let [handler-chan (chan)]
       (fixtures/with-test-standard-queue
+        ;; WATCHOUT: We redefine receive-message to permanently cause an error to be handled,
+        ;;           which is recoverable by restarting and should cause the loop to be restarted
+        ;;           by an amount of times that fits the restart-limit and delay settings.
         (with-redefs-fn {#'sqs/receive-message
                          (fn [_ _ _] (HttpTimeoutException.
-                                       "Something seems to be wrong with the network."))}
-          #(let [stop-fn (fixtures/with-handle-queue-queue-opts-standard-no-autostop
+                                       "Testing permanent network failure"))}
+          #(let [restart-limit 3
+                 restart-delay-seconds 1
+                 stop-fn (fixtures/with-handle-queue-queue-opts-standard-no-autostop
                            handler-chan
-                           {:restart-limit         3
-                            :restart-delay-seconds 1})]
-             (Thread/sleep 3500)
+                           {:restart-limit         restart-limit
+                            :restart-delay-seconds restart-delay-seconds})]
+             (Thread/sleep (+ (* restart-limit (* restart-delay-seconds 1000)) 500))
              (let [stats (stop-fn)]
-               (is (= (:restart-count stats) 3))))))
+               (is (= (:restart-count stats) restart-limit))))))
       (close! handler-chan))))
 
-(deftest handle-queue-restarts-after-recoverable-error-occured
+(deftest handle-queue-restarts-if-recoverable-errors-occurs
   (testing "handle-queue restarts properly and continues running upon recoverable error"
-    (let [handler-chan (chan)]
+    (let [handler-chan (chan)
+          receive-message sqs/receive-message
+          called-counter (atom 0)]
       (fixtures/with-test-standard-queue
-        (let [stop-fn (fixtures/with-handle-queue-queue-opts-standard-no-autostop
-                        handler-chan
-                        {:restart-delay-seconds 1})]
-          ;; Cause some trouble in receive-message ...
-          (trouble/activate-troublemaker :receive-message)
-          (Thread/sleep 1500)
+        ;; WATCHOUT: To test a temporary error, we redefine receive-message to throw
+        ;;           an error once and afterwards do what the original function did,
+        ;;           which we saved previously:
+        (with-redefs-fn {#'sqs/receive-message
+                         (fn [sqs-client queue-name opts]
+                           (swap! called-counter inc)
+                           (if (= @called-counter 1)
+                             (HttpTimeoutException. "Testing temporary network failure")
+                             (receive-message sqs-client queue-name opts)))}
+          #(let [restart-delay-seconds 1
+                 stop-fn (fixtures/with-handle-queue-queue-opts-standard-no-autostop
+                           handler-chan
+                           {:restart-delay-seconds restart-delay-seconds})]
+             ;; Give the loop some time to handle that error ...
+             (Thread/sleep (+ (* restart-delay-seconds 1000) 500))
 
-          ;; All good again, back to work!
-          (trouble/deactivate-troublemaker :receive-message)
-          (Thread/sleep 1500)
-
-          ;; Verify that the queue is still handled properly ...
-          (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
-                                             fixtures/test-standard-queue-name
-                                             (first test-messages-basic))))
-          (is (= (first test-messages-basic) (:body (<!! handler-chan))))
-          (let [stats (stop-fn)]
-            ;; ... but receiving was actually restarted
-            (is (>= (:restart-count stats) 0)))))
+             ;; Verify that sending/receiving still works ...
+             (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
+                                                fixtures/test-standard-queue-name
+                                                test-message-with-time)))
+             (is (= test-message-with-time (:body (<!! handler-chan))))
+             (let [stats (stop-fn)]
+               ;; ... and that the loop was actually restarted ...
+               (is (= (:restart-count stats) 1))
+               ;; ... but terminated properly
+               (is (contains? stats :stopped-at))))))
       (close! handler-chan))))
 
 (deftest handle-queue-terminates-upon-unrecoverable-error-occured
   (testing "handle-queue terminates when an error occured that was considered fatal/unrecoverable"
     (let [handler-chan (chan)]
       (fixtures/with-test-standard-queue
+        ;; WATCHOUT: We redefine receive-message to permanently cause an error to be handled,
+        ;;           which is not recoverable by restarting and therefore terminates the loop.
         (with-redefs-fn {#'sqs/receive-message
                          (fn [_ _ _]
-                           (RuntimeException. "Something horrible just happened!"))}
+                           (RuntimeException. "Testing runtime error"))}
           #(let [stats (fixtures/with-handle-queue-standard
                          handler-chan)]
-             (Thread/sleep 1000)
+             (Thread/sleep 500)
              (is (= (:restart-count stats) 0))
              (is (contains? stats :stopped-at)))))
       (close! handler-chan))))

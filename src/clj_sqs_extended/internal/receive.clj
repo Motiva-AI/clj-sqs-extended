@@ -3,8 +3,7 @@
             [clojure.tools.logging :as log]
             [tick.alpha.api :as t]
             [clj-sqs-extended.aws.sqs :as sqs])
-  (:import [java.lang ReflectiveOperationException]
-           [java.net
+  (:import [java.net
             SocketException
             UnknownHostException]
            [java.net.http HttpTimeoutException]))
@@ -66,31 +65,22 @@
 
 (defn- error-might-be-recovered-by-restarting
   [error]
-  (cond
-    (instance? ReflectiveOperationException error) false
-    (instance? RuntimeException error) false
-    (instance? UnknownHostException error) true
-    (instance? SocketException error) true
-    (instance? UnknownHostException error) true
-    (instance? HttpTimeoutException error) true
-    :else false))
+  (contains? #{UnknownHostException
+               SocketException
+               HttpTimeoutException} (type error)))
 
 (defn- handle-message-receival-error
   [sqs-ext-client loop-state error restart-delay-seconds receive-opts]
+  (log/warnf error "Error occured while receiving message!")
   (if (error-might-be-recovered-by-restarting error)
-    (let [count (get-in @loop-state [:stats :restart-count])]
-      (if (< count (:restart-limit receive-opts))
-        (do
-          (log/warnf error "Error occured while receiving message!")
-          (Thread/sleep (* 1000 restart-delay-seconds))
-          (restart-receive-loop sqs-ext-client
-                                loop-state
-                                receive-opts))
-        (log/warnf "Skipping receive-loop restart because the limit (%d) has been reached!"
-                   count)))
-    (do
-      (log/fatalf error "Unrecovereable error occured while receiving message!")
-      (stop-receive-loop loop-state))))
+    (when (< (get-in @loop-state [:stats :restart-count])
+             (:restart-limit receive-opts))
+      (do
+        (Thread/sleep (* 1000 restart-delay-seconds))
+        (restart-receive-loop sqs-ext-client
+                              loop-state
+                              receive-opts)))
+    (stop-receive-loop loop-state)))
 
 (defn- process-message
   [sqs-ext-client loop-state message auto-delete]
