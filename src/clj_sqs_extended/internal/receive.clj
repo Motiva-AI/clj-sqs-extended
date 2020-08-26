@@ -69,13 +69,10 @@
                  (assoc-in [:stats :restarted-at] (t/now)))))
     (close! old-in-chan)))
 
-(defn- restart-limit-reached?
+(defn- restart-limit-not-reached?
   [loop-state limit]
-  (when (> (get-in @loop-state [:stats :restart-count])
+  (when (< (get-in @loop-state [:stats :restart-count])
            limit)))
-
-(def ^:private restart-limit-not-reached?
-  (complement restart-limit-reached?))
 
 (defn- handle-message-receival-error
   [sqs-ext-client loop-state error restart-delay-seconds receive-opts]
