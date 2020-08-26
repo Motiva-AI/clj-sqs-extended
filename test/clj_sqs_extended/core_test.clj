@@ -6,8 +6,14 @@
             [clj-sqs-extended.internal.receive :as receive]
             [clj-sqs-extended.test-fixtures :as fixtures]
             [clj-sqs-extended.test-helpers :as helpers])
-  (:import [com.amazonaws.services.sqs.model QueueDoesNotExistException AmazonSQSException]
-           [java.net.http HttpTimeoutException]))
+  (:import [com.amazonaws.services.sqs.model
+            AmazonSQSException
+            QueueDoesNotExistException]
+           [java.net.http HttpTimeoutException]
+           [java.net
+            SocketException
+            UnknownHostException]
+           [java.lang ReflectiveOperationException]))
 
 
 (use-fixtures :once fixtures/with-test-sqs-ext-client)
@@ -153,10 +159,10 @@
                  stop-fn (fixtures/with-handle-queue-queue-opts-standard-no-autostop
                            handler-chan
                            {:restart-delay-seconds restart-delay-seconds})]
-             ;; Give the loop some time to handle that error ...
+             ;; give the loop some time to handle that error ...
              (Thread/sleep (+ (* restart-delay-seconds 1000) 500))
 
-             ;; Verify that sending/receiving still works ...
+             ;; verify that sending/receiving still works ...
              (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
                                                 fixtures/test-standard-queue-name
                                                 test-message-with-time)))
@@ -214,7 +220,7 @@
                                              (first test-messages-basic)
                                              {:format format})))
           (is (= (first test-messages-basic) (:body (<!! out-chan))))
-          ;; Terminate receive loop and thereby close the out-channel
+          ;; terminate receive loop and thereby close the out-channel
           (stop-fn)
           (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
                                              fixtures/test-standard-queue-name
@@ -243,7 +249,9 @@
 
             ;; WATCHOUT: The handler-fn of the wrap-handle-queue fixture
             ;;           calls the done-fn function when receiving the message
-            ;;           via the channel so we may not call it again here!
+            ;;           via the channel so we may not call it again here but
+            ;;           have to give it a little time!
+            (Thread/sleep 500)
 
             ;; but we can make sure the message was actually deleted
             (is (thrown? AmazonSQSException
@@ -269,6 +277,10 @@
             ;; no handle present because the message was already auto-deleted
             (is (not (contains? received-message :done-fn)))
 
+            ;; make sure we don't issue the delete before the library got its
+            ;; chance
+            (Thread/sleep 500)
+
             ;; attempting to delete it should yield an exception because its
             ;; not there (anymore)
             (is (thrown? AmazonSQSException
@@ -276,3 +288,16 @@
                                              fixtures/test-standard-queue-name
                                              received-message))))))
       (close! handler-chan))))
+
+(deftest recoverable-errors-get-judged-properly
+  (testing "error-might-be-recovered-by-restarting? judges errors correctly"
+    (is (true? (receive/error-might-be-recovered-by-restarting?
+                 (UnknownHostException.))))
+    (is (true? (receive/error-might-be-recovered-by-restarting?
+                 (SocketException.))))
+    (is (true? (receive/error-might-be-recovered-by-restarting?
+                 (HttpTimeoutException. "test"))))
+    (is (false? (receive/error-might-be-recovered-by-restarting?
+                  (RuntimeException.))))
+    (is (false? (receive/error-might-be-recovered-by-restarting?
+                  (ReflectiveOperationException.))))))

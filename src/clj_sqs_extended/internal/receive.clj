@@ -9,6 +9,12 @@
            [java.net.http HttpTimeoutException]))
 
 
+(defn error-might-be-recovered-by-restarting?
+  [error]
+  (contains? #{UnknownHostException
+               SocketException
+               HttpTimeoutException} (type error)))
+
 (defn- secs-between
   [t1 t2]
   (t/seconds (t/between t1 t2)))
@@ -63,24 +69,33 @@
                  (assoc-in [:stats :restarted-at] (t/now)))))
     (close! old-in-chan)))
 
-(defn- error-might-be-recovered-by-restarting
-  [error]
-  (contains? #{UnknownHostException
-               SocketException
-               HttpTimeoutException} (type error)))
+(defn- restart-limit-reached?
+  [loop-state limit]
+  (when (> (get-in @loop-state [:stats :restart-count])
+           limit)))
+
+(def ^:private restart-limit-not-reached?
+  (complement restart-limit-reached?))
 
 (defn- handle-message-receival-error
   [sqs-ext-client loop-state error restart-delay-seconds receive-opts]
-  (log/warnf error "Error occured while receiving message!")
-  (if (error-might-be-recovered-by-restarting error)
-    (when (< (get-in @loop-state [:stats :restart-count])
-             (:restart-limit receive-opts))
-      (do
-        (Thread/sleep (* 1000 restart-delay-seconds))
-        (restart-receive-loop sqs-ext-client
-                              loop-state
-                              receive-opts)))
-    (stop-receive-loop loop-state)))
+  (let [restart-limit (:restart-limit receive-opts)]
+    (if (error-might-be-recovered-by-restarting? error)
+      (if (restart-limit-not-reached? loop-state
+                                      restart-limit)
+        (do
+          (Thread/sleep (* 1000 restart-delay-seconds))
+          (log/infof "Restarting receive-loop to recover from error: '%s'"
+                     (.getMessage error))
+          (restart-receive-loop sqs-ext-client
+                                loop-state
+                                receive-opts))
+        (log/warnf "Restart-limit (%d) reached, not restarting."
+                   restart-limit))
+      (throw (ex-info
+               (format "receive-loop for queue '%s' failed."
+                       (:queue-name @loop-state))
+               {:reason (.getMessage error)})))))
 
 (defn- process-message
   [sqs-ext-client loop-state message auto-delete]
