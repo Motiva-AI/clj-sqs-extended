@@ -6,7 +6,7 @@
             [clj-sqs-extended.internal.receive :as receive]
             [clj-sqs-extended.test-fixtures :as fixtures]
             [clj-sqs-extended.test-helpers :as helpers])
-  (:import [com.amazonaws.services.sqs.model QueueDoesNotExistException]
+  (:import [com.amazonaws.services.sqs.model QueueDoesNotExistException AmazonSQSException]
            [java.net.http HttpTimeoutException]))
 
 
@@ -225,39 +225,54 @@
 
 (deftest done-fn-handle-present-when-auto-delete-false
   (testing "done-fn handle is present in response when auto-delete is false"
-    (doseq [format [:transit]]
-      (let [handler-chan (chan)]
-        (fixtures/with-test-standard-queue
-          (fixtures/with-handle-queue-queue-opts-standard
-            handler-chan
-            {:format      format
-             :auto-delete false}
+    (let [handler-chan (chan)]
+      (fixtures/with-test-standard-queue
+        (fixtures/with-handle-queue-queue-opts-standard
+          handler-chan
+          {:auto-delete false}
 
-            (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
-                                               fixtures/test-standard-queue-name
-                                               (first test-messages-basic)
-                                               {:format format})))
-            (let [received-message (<!! handler-chan)]
-              (is (= (first test-messages-basic) (:body received-message)))
-              (is (contains? received-message :done-fn))
-              (is (fn? (:done-fn received-message))))))
-        (close! handler-chan)))))
+          (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
+                                             fixtures/test-standard-queue-name
+                                             (last test-messages-basic))))
+          (let [received-message (<!! handler-chan)]
+            (is (= (last test-messages-basic) (:body received-message)))
+
+            ;; function handle is properly returned
+            (is (contains? received-message :done-fn))
+            (is (fn? (:done-fn received-message)))
+
+            ;; WATCHOUT: The handler-fn of the wrap-handle-queue fixture
+            ;;           calls the done-fn function when receiving the message
+            ;;           via the channel so we may not call it again here!
+
+            ;; but we can make sure the message was actually deleted
+            (is (thrown? AmazonSQSException
+                         (sqs/delete-message @fixtures/test-sqs-ext-client
+                                             fixtures/test-standard-queue-name
+                                             received-message))))))
+      (close! handler-chan))))
 
 (deftest done-fn-handle-absent-when-auto-delete-true
   (testing "done-fn handle is not present in response when auto-delete is true"
-    (doseq [format [:transit :json]]
-      (let [handler-chan (chan)]
-        (fixtures/with-test-standard-queue
-          (fixtures/with-handle-queue-queue-opts-standard
-            handler-chan
-            {:format      format
-             :auto-delete true}
+    (let [handler-chan (chan)]
+      (fixtures/with-test-standard-queue
+        (fixtures/with-handle-queue-queue-opts-standard
+          handler-chan
+          {:auto-delete true}
 
-            (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
-                                               fixtures/test-standard-queue-name
-                                               (first test-messages-basic)
-                                               {:format format})))
-            (let [received-message (<!! handler-chan)]
-              (is (= (first test-messages-basic) (:body received-message)))
-              (is (not (contains? received-message :done-fn))))))
-        (close! handler-chan)))))
+          (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
+                                             fixtures/test-standard-queue-name
+                                             (first test-messages-basic))))
+          (let [received-message (<!! handler-chan)]
+            (is (= (first test-messages-basic) (:body received-message)))
+
+            ;; no handle present because the message was already auto-deleted
+            (is (not (contains? received-message :done-fn)))
+
+            ;; attempting to delete it should yield an exception because its
+            ;; not there (anymore)
+            (is (thrown? AmazonSQSException
+                         (sqs/delete-message @fixtures/test-sqs-ext-client
+                                             fixtures/test-standard-queue-name
+                                             received-message))))))
+      (close! handler-chan))))
