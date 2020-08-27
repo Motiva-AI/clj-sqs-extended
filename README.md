@@ -1,18 +1,10 @@
 # clj-sqs-extended
 
+This library is a clojure wrapper for the [Amazon SQS Extended Client Library for Java](https://github.com/awslabs/amazon-sqs-java-extended-client-lib).
+
 [![CircleCI](https://circleci.com/gh/Motiva-AI/clj-sqs-extended/tree/master.svg?style=svg)](https://circleci.com/gh/Motiva-AI/clj-sqs-extended/tree/master)
 
-```clojure
-[motiva/clj-sqs-extended "0.1.0-SNAPSHOT"]
-```
-
-<br/>
-
-This is a clojure wrapper for the [Amazon SQS Extended Client Library for Java](https://github.com/awslabs/amazon-sqs-java-extended-client-lib).
-
-<br/>
-  
-## [Example](https://github.com/Motiva-AI/clj-sqs-extended/blob/master/test/clj_sqs_extended/example.clj)
+## Example
 
 In this example we define a very simple handling function ```dispatch-action-service``` for new messages
 which just prints out their content. Using ```handle-queue``` with our AWS and queue
@@ -26,7 +18,7 @@ handling.
 
 As a proof of concept, we sent a single large message that gets printed out by
 our handler.
- 
+
 ```clj
 (ns clj-sqs-extended.example
   (:require [clojure.tools.logging :as log]
@@ -103,9 +95,9 @@ finished handling process (hopefully handy for debugging).
 ```create-standard-queue``` and ```create-fifo-queue``` are provided to setup
 queues programmatically, although this will mostly be done directly via the
 AWS management services.
- 
+
 ```send-message``` and ```send-fifo-message``` can be used to send a message to
-either a standard or a FIFO queue via the passed ```sqs-ext-client``` instance. 
+either a standard or a FIFO queue via the passed ```sqs-ext-client``` instance.
 Both functions only require the name of the queue and a message payload. The format
 for serialisation (currently either :json or :transit) as well as a
 deduplication-id can be optionally set in the options of those functions.
@@ -120,17 +112,19 @@ deduplication-id can be optionally set in the options of those functions.
 
 ### Testing
 
+Tests are run inside a CircleCI Docker container on localhost.
+
+```
+$ make test
+```
+
+### REPL
+
 You can spin up a localstack endpoint on your machine which will provide
 mockup SQS and S3 services to be used while developing. Set the endpoints
 inside the aws-creds options for handle-queue to: "https://localhost:4566"
 
 ```
 $ make devel
-```
-
-Tests are run inside a CircleCI Docker container on localhost.
-
-```
-$ make test
 ```
 
