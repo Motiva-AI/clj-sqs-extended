@@ -57,3 +57,11 @@ jobs:
             - ~/.m2
             - .cpcache
           key: v1-clj-sqs-extended-library-wrapper-{{ checksum "project.clj" }}
+
+      - deploy:
+          name: Publish to Clojars
+          command: |
+            if [ "${CIRCLE_BRANCH}" == "master" ]; then
+                lein deploy releases
+            fi
+
