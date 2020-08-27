@@ -6,19 +6,6 @@ This library is a clojure wrapper for the [Amazon SQS Extended Client Library fo
 
 ## Example
 
-In this example we define a very simple handling function ```dispatch-action-service``` for new messages
-which just prints out their content. Using ```handle-queue``` with our AWS and queue
-settings we will receive incoming messages from our queue directly at our handling
-function.
-
-Worker threads get started in the background and will continue running until
-CTRL-C terminated. Upon termination we stop the process loop via the ```stop-fn```
-handle which we received back from ```handle-queue``` when we initiated the
-handling.
-
-As a proof of concept, we sent a single large message that gets printed out by
-our handler.
-
 ```clj
 (ns clj-sqs-extended.example
   (:require [clojure.tools.logging :as log]
