@@ -39,4 +39,9 @@
 
   :aliases {"test"   ["run" "-m" "circleci.test/dir" :project/test-paths]
             "tests"  ["run" "-m" "circleci.test"]
-            "retest" ["run" "-m" "circleci.test.retest"]})
+            "retest" ["run" "-m" "circleci.test.retest"]}
+
+  :repositories [["releases" {:url           "https://clojars.org/repo"
+                              :username      "motiva-ai"
+                              :password      :env
+                              :sign-releases false}]])
