@@ -1,5 +1,7 @@
 # clj-sqs-extended
 
+[![CircleCI](https://circleci.com/gh/Motiva-AI/clj-sqs-extended/tree/master.svg?style=svg)](https://circleci.com/gh/Motiva-AI/clj-sqs-extended/tree/master)
+
 ## API Highlight
 
 Create a worker for consuming an SQS queue (Paul: I'm not sure about this API for handle-queue yet):
