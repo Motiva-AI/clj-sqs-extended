@@ -13,15 +13,14 @@
 
 (def ^:private queue-config {:queue-name          "some-unique-queue-name-to-use"
                              :s3-bucket-name      "some-unique-bucket-name-to-use"
-                             :num-handler-threads 1
-                             :auto-delete         true})
+                             :num-handler-threads 1})
 
 (defn- dispatch-action-service
   ([message]
    (log/infof "I got %s." (:body message)))
   ([message done-fn]
-   (done-fn)
-   (log/infof "I got %s." (:body message))))
+   (log/infof "I got %s." (:body message))
+   (done-fn)))
 
 (defn- start-action-service-queue-listener
   []
