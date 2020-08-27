@@ -91,6 +91,16 @@
          (.purgeQueue sqs-client))))
 
 (defn send-message
+  "Send a message to a standard queue.
+
+  Argments:
+    sqs-client       - The extended sqs-client via which the request shall be sent
+    queue-name       - A string containing the name of the queue where the message shall be sent to
+    message          - The actual message/data to be sent
+
+  Options:
+    format           - The format (currently :json or :transit) to serialize outgoing
+                       messages with (optional, default: :transit)"
   ([sqs-client queue-name message]
    (send-message sqs-client queue-name message {}))
 
@@ -104,6 +114,19 @@
           (.getMessageId)))))
 
 (defn send-fifo-message
+  "Send a message to a FIFO queue.
+
+  Argments:
+    sqs-client       - The extended sqs-client via which the request shall be sent
+    queue-name       - A string containing the name of the queue where the message shall be sent to
+    message          - The actual message/data to be sent
+    message-group-id - A string that specifies the group that this message belongs to.
+                       Messages belonging to the same group are guaranteed FIFO
+
+  Options:
+    format           - The format (currently :json or :transit) to serialize outgoing
+                       messages with (optional, default: :transit)
+    deduplication-id - A string used for deduplication of sent messages"
   ([sqs-client queue-name message group-id]
    (send-fifo-message sqs-client queue-name message group-id {}))
 

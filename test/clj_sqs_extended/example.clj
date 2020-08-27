@@ -1,6 +1,5 @@
 (ns clj-sqs-extended.example
-  (:require [clojure.test :refer [deftest is testing]]
-            [clojure.tools.logging :as log]
+  (:require [clojure.tools.logging :as log]
             [clj-sqs-extended.core :as sqs-ext]
             [clj-sqs-extended.test-helpers :as helpers])
   (:import (java.util.concurrent CountDownLatch)))
@@ -50,10 +49,8 @@
   (let [sqs-ext-client (sqs-ext/sqs-ext-client aws-config
                                                (:s3-bucket-name queue-config))]
 
-    ;; Start processing all received messages ...
     (future (start-worker))
 
-    ;; Send a large test message that requires S3 usage to store ...
     (let [message (helpers/random-message-larger-than-256kb)]
       (log/infof "Sent message with ID '%s'."
                  (sqs-ext/send-message sqs-ext-client
@@ -62,4 +59,3 @@
 
 (comment
   (run-example))
-
