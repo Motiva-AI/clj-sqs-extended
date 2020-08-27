@@ -62,9 +62,9 @@
                             queue-opts)
         handler-fn (fn ([message]
                         (>!! handler-chan message))
-                     ([message done-fn]
-                      (>!! handler-chan message)
-                      (done-fn)))
+                     ([message _]
+                      ;; WATCHOUT: Second parameter (done-fn) is not used here.
+                      (>!! handler-chan message)))
         stop-fn (sqs-ext/handle-queue (merge aws-config aws-opts)
                                       queue-config
                                       handler-fn)]

@@ -243,21 +243,13 @@
           (let [received-message (<!! handler-chan)]
             (is (= (last test-messages-basic) (:body received-message)))
 
-            ;; function handle is properly returned
+            ;; function handle is properly returned ...
             (is (contains? received-message :done-fn))
             (is (fn? (:done-fn received-message)))
 
-            ;; WATCHOUT: The handler-fn of the wrap-handle-queue fixture
-            ;;           calls the done-fn function when receiving the message
-            ;;           via the channel so we may not call it again here but
-            ;;           have to give it a little time!
-            (Thread/sleep 500)
+            ;; ... and can be used to delete the message now
+            (is ((:done-fn received-message))))))
 
-            ;; but we can make sure the message was actually deleted
-            (is (thrown? AmazonSQSException
-                         (sqs/delete-message @fixtures/test-sqs-ext-client
-                                             fixtures/test-standard-queue-name
-                                             received-message))))))
       (close! handler-chan))))
 
 (deftest done-fn-handle-absent-when-auto-delete-true
@@ -277,27 +269,25 @@
             ;; no handle present because the message was already auto-deleted
             (is (not (contains? received-message :done-fn)))
 
-            ;; make sure we don't issue the delete before the library got its
-            ;; chance
+            ;; make sure we don't try to delete it before the library got its
+            ;; chance to do so
             (Thread/sleep 500)
 
-            ;; attempting to delete it should yield an exception because its
-            ;; not there (anymore)
-            (is (thrown? AmazonSQSException
-                         (sqs/delete-message @fixtures/test-sqs-ext-client
-                                             fixtures/test-standard-queue-name
-                                             received-message))))))
+            ;; attempting to delete it now should yield an exception because its
+            ;; already not there anymore
+            (is (thrown-with-msg? AmazonSQSException
+                                  #"^.*Status Code: 400; Error Code: 400.*$"
+                                  (sqs/delete-message @fixtures/test-sqs-ext-client
+                                                      fixtures/test-standard-queue-name
+                                                      received-message))))))
       (close! handler-chan))))
 
 (deftest recoverable-errors-get-judged-properly
   (testing "error-might-be-recovered-by-restarting? judges errors correctly"
-    (is (true? (receive/error-might-be-recovered-by-restarting?
-                 (UnknownHostException.))))
-    (is (true? (receive/error-might-be-recovered-by-restarting?
-                 (SocketException.))))
-    (is (true? (receive/error-might-be-recovered-by-restarting?
-                 (HttpTimeoutException. "test"))))
-    (is (false? (receive/error-might-be-recovered-by-restarting?
-                  (RuntimeException.))))
-    (is (false? (receive/error-might-be-recovered-by-restarting?
-                  (ReflectiveOperationException.))))))
+    (are [severity error]
+      (= severity (receive/error-might-be-recovered-by-restarting? error))
+      true (UnknownHostException.)
+      true (SocketException.)
+      true (HttpTimeoutException. "test")
+      false (RuntimeException.)
+      false (ReflectiveOperationException.))))

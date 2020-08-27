@@ -20,7 +20,7 @@
         (let [response (sqs/receive-message @fixtures/test-sqs-ext-client
                                             fixtures/test-standard-queue-name
                                             {:format format})]
-          (is (= true (empty? response))))))))
+          (is (empty? response)))))))
 
 (deftest can-receive-message
   (testing "Sending/Receiving basic maps"

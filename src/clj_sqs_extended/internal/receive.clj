@@ -69,17 +69,25 @@
                  (assoc-in [:stats :restarted-at] (t/now)))))
     (close! old-in-chan)))
 
-(defn- restart-limit-not-reached?
+(defn- restart-limit-reached?
   [loop-state limit]
-  (when (< (get-in @loop-state [:stats :restart-count])
+  (when (> (get-in @loop-state [:stats :restart-count])
            limit)))
+
+(def ^:private restart-limit-not-reached?
+  (complement restart-limit-reached?))
 
 (defn- handle-message-receival-error
   [sqs-ext-client loop-state error restart-delay-seconds receive-opts]
   (let [restart-limit (:restart-limit receive-opts)]
-    (if (error-might-be-recovered-by-restarting? error)
-      (if (restart-limit-not-reached? loop-state
-                                      restart-limit)
+    (letfn [(raise-error []
+              (throw (ex-info
+                       (format "receive-loop for queue '%s' failed."
+                               (:queue-name @loop-state))
+                       {:reason (.getMessage error)})))]
+      (cond
+        (and (error-might-be-recovered-by-restarting? error)
+             (restart-limit-not-reached? loop-state restart-limit))
         (do
           (Thread/sleep (* 1000 restart-delay-seconds))
           (log/infof "Restarting receive-loop to recover from error: '%s'"
@@ -87,12 +95,13 @@
           (restart-receive-loop sqs-ext-client
                                 loop-state
                                 receive-opts))
-        (log/warnf "Restart-limit (%d) reached, not restarting."
-                   restart-limit))
-      (throw (ex-info
-               (format "receive-loop for queue '%s' failed."
-                       (:queue-name @loop-state))
-               {:reason (.getMessage error)})))))
+
+        (and (error-might-be-recovered-by-restarting? error)
+             (restart-limit-reached? loop-state restart-limit))
+        (raise-error)
+
+        (not (error-might-be-recovered-by-restarting? error))
+        (raise-error)))))
 
 (defn- process-message
   [sqs-ext-client loop-state message auto-delete]
