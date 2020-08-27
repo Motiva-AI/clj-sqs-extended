@@ -6,19 +6,26 @@ This library is a clojure wrapper for the [Amazon SQS Extended Client Library fo
 
 ## Example
 
+Spin up some services via Docker on your localhost,
+
+```
+$ make devel
+```
+
+
 ```clj
-(ns clj-sqs-extended.example
-  (:require [clojure.tools.logging :as log]
-            [clj-sqs-extended.core :as sqs-ext]
-            [clj-sqs-extended.test-helpers :as helpers])
-  (:import (java.util.concurrent CountDownLatch)))
+(require '[clojure.tools.logging :as log]
+ '[clj-sqs-extended.core :as sqs-ext]
+ '[clj-sqs-extended.test-helpers :as helpers])
+
+(import '[java.util.concurrent CountDownLatch])
 
 
 (def aws-config
  {:aws-access-key-id     "your-access-key"
   :aws-secret-access-key "your-secret-key"
-  :aws-s3-endpoint-url   "https://s3.us-east-2.amazonaws.com"
-  :aws-sqs-endpoint-url  "https://sqs.us-east-2.amazonaws.com"
+  :aws-s3-endpoint-url   "https://localhost:4566"
+  :aws-sqs-endpoint-url  "https://localhost:4566"
   :aws-region            "us-east-2"})
 
 (def queue-config
@@ -82,15 +89,5 @@ Tests are run inside a CircleCI Docker container on localhost.
 
 ```
 $ make test
-```
-
-### REPL
-
-You can spin up a localstack endpoint on your machine which will provide
-mockup SQS and S3 services to be used while developing. Set the endpoints
-inside the aws-creds options for handle-queue to: "https://localhost:4566"
-
-```
-$ make devel
 ```
 
