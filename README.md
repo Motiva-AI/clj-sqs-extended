@@ -1,113 +1,80 @@
 # clj-sqs-extended
 
+This library is a clojure wrapper for the [Amazon SQS Extended Client Library for Java](https://github.com/awslabs/amazon-sqs-java-extended-client-lib).
+
 [![CircleCI](https://circleci.com/gh/Motiva-AI/clj-sqs-extended/tree/master.svg?style=svg)](https://circleci.com/gh/Motiva-AI/clj-sqs-extended/tree/master)
-
-## API Highlight
-
-Create a worker for consuming an SQS queue (Paul: I'm not sure about this API for handle-queue yet):
-
-```
-sqs-utils.core> (doc handle-queue)
--------------------------
-sqs-utils.core/handle-queue
-[aws-creds queue-config handler-fn]
-
-  Set up a loop that listens to a queue and process incoming messages.
-
-   Arguments:
-
-   aws-config - A map of the following settings used for interacting with AWS SQS:
-     access-key   - AWS access key ID
-     secret-key   - AWS secret access key
-     endpoint-url - AWS endpoint (usually an HTTPS based URL)
-     region       - AWS region
-
-   queue-config - A map of the configuration for this queue
-     queue-name     - required: name of the queue
-     s3-bucket-name - required: name of an existing S3 bucket)
-     num-handler-threads - optional: how many threads to run (defaults: 4)
-     auto-delete   - optional: boolean, if true, immediately delete the message,
-                     if false, forward a `done` function and leave the
-                     message intact. (defaults: true)
-
-   handler-fn - a function which will be passed the incoming message. If
-                auto-delete is false, a second argument will be passed a `done`
-                function to call when finished processing.
-
-  Returns:
-  a kill function - call the function to terminate the loop.
-=> nil
-```
-
-Send messages to a queue:
-
-```
-sqs-utils.core> (doc send-message)
--------------------------
-sqs-utils.core/send-message
-[sqs-client queue-name message]
-  Send a message to a standard queue.
-=> Message ID as String
-
-sqs-utils.core> (doc send-fifo-message)
--------------------------
-sqs-utils.core/send-fifo-message
-[sqs-client queue-name message group-id
-  {:keys [format
-          deduplication-id]
-   :or   {format :transit}}]
-  Send a message to a FIFO queue.
-
-  Argments:
-  message-group-id - a tag that specifies the group that this message
-  belongs to. Messages belonging to the same group are guaranteed FIFO.
-
-  Options:
-  format - format to serialize outgoing message with (:json :transit)
-  deduplication-id - token used for deduplication of sent messages
-=> nil
-```
 
 ## Example
 
+Spin up some services via Docker on your localhost,
+
+```
+$ make devel
+```
+
 
 ```clj
+(require '[clojure.tools.logging :as log]
+ '[clj-sqs-extended.core :as sqs-ext]
+ '[clj-sqs-extended.test-helpers :as helpers])
+
+(import '[java.util.concurrent CountDownLatch])
+
+
+(def aws-config
+ {:aws-access-key-id     "your-access-key"
+  :aws-secret-access-key "your-secret-key"
+  :aws-s3-endpoint-url   "https://localhost:4566"
+  :aws-sqs-endpoint-url  "https://localhost:4566"
+  :aws-region            "us-east-2"})
+
+(def queue-config
+ {:queue-name          "some-unique-queue-name-to-use"
+  :s3-bucket-name      "some-unique-bucket-name-to-use"
+  :num-handler-threads 1})
+
 (defn dispatch-action-service
- [{foo :foo} done-fn]
- (println (format "I got %s" foo))
- (done-fn))
+  ([message]
+   (log/infof "I got %s." (:body message)))
+  ([message done-fn]
+   (log/infof "I got %s." (:body message))
+   (done-fn)))
 
 (defn start-action-service-queue-listener
- []
- (sqs-utils/handle-queue
-  (queue/aws-creds)
-  (queue/queue-config :action-service)
-  dispatch-action-service))
+  []
+  (sqs-ext/handle-queue aws-config
+                        queue-config
+                        dispatch-action-service))
 
 (defn start-queue-listeners
-  "Start all the queue listener loops. Returns a function which stops them all."
   []
   (let [stop-fns [(start-action-service-queue-listener)]]
     (fn []
-      (doseq [stop-fn stop-fns]
-        (stop-fn)))))
+      (doseq [f stop-fns]
+        (f)))))
 
 (defn start-worker
-  "Starts queue workers and blocks indefinitely"
   []
-  (let [sigterm (java.util.concurrent.CountDownLatch. 1)]
-    (log/info "Starting queue workers...")
-    (start-queue-listeners)
+  (let [sigterm (CountDownLatch. 1)]
+    (log/info "Starting queue workers ...")
+    (let [stop-listeners (start-queue-listeners)]
+      (.await sigterm)
+      (stop-listeners))))
 
-    ;; blocks main from exiting
-    (.await sigterm)))
+(defn run-example
+  []
+  (let [sqs-ext-client (sqs-ext/sqs-ext-client aws-config
+                                               (:s3-bucket-name queue-config))]
 
-;; start this in the background
-(future (start-worker))
+    ;; Start processing all received messages ...
+    (future (start-worker))
 
-(send-message (queue/aws-creds) (queue/queue-url :action-service) {:foo "potatoes"})
-=> nil
-"I got potatoes"
+    ;; Send a large test message that requires S3 usage to store ...
+    (let [message (helpers/random-message-larger-than-256kb)]
+      (log/infof "Sent message with ID '%s'."
+                 (sqs-ext/send-message sqs-ext-client
+                                       (:queue-name queue-config)
+                                       message)))))
 ```
 
 ## Development
