@@ -24,8 +24,8 @@
             (if auto-delete
               (handler-fn message)
               (handler-fn message (:done-fn message)))
-            (catch Throwable e
-              (log/error e "Handler function threw an error!")))
+            (catch Throwable error
+              (log/error error "Handler function threw an error!")))
           (recur))))))
 
 (defn handle-queue
@@ -41,24 +41,37 @@
    {:keys [queue-name
            s3-bucket-name
            num-handler-threads
+           restart-limit
+           restart-delay-seconds
            auto-delete
            format]
-    :or   {num-handler-threads 4
-           auto-delete         true
-           format              :transit}}
+    :or   {num-handler-threads   4
+           restart-limit         6
+           restart-delay-seconds 10
+           auto-delete           true
+           format                :transit}}
    handler-fn]
   (let [sqs-ext-client (sqs/sqs-ext-client aws-creds s3-bucket-name)
         receive-chan (chan)
         stop-fn (receive/receive-loop sqs-ext-client
                                       queue-name
                                       receive-chan
-                                      {:auto-delete auto-delete
-                                       :format      format})]
+                                      {:auto-delete           auto-delete
+                                       :restart-limit         restart-limit
+                                       :restart-delay-seconds restart-delay-seconds
+                                       :format                format})]
     (log/infof (str "Now handling queue '%s' with:\n"
                     "  num-handler-threads: %d\n"
+                    "  restart-limit: %d\n"
+                    "  restart-delay-seconds: %d\n"
                     "  auto-delete: %s\n"
                     "  format: %s")
-               queue-name num-handler-threads auto-delete format)
+               queue-name
+               num-handler-threads
+               restart-limit
+               restart-delay-seconds
+               auto-delete
+               format)
     (launch-handler-threads num-handler-threads
                             receive-chan
                             auto-delete

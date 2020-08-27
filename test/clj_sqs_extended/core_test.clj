@@ -1,11 +1,19 @@
 (ns clj-sqs-extended.core-test
   (:require [clojure.test :refer :all]
             [clojure.core.async :refer [chan close! <!!]]
+            [clj-sqs-extended.aws.sqs :as sqs]
             [clj-sqs-extended.core :as sqs-ext]
             [clj-sqs-extended.internal.receive :as receive]
             [clj-sqs-extended.test-fixtures :as fixtures]
             [clj-sqs-extended.test-helpers :as helpers])
-  (:import (com.amazonaws.services.sqs.model QueueDoesNotExistException)))
+  (:import [com.amazonaws.services.sqs.model
+            AmazonSQSException
+            QueueDoesNotExistException]
+           [java.net.http HttpTimeoutException]
+           [java.net
+            SocketException
+            UnknownHostException]
+           [java.lang ReflectiveOperationException]))
 
 
 (use-fixtures :once fixtures/with-test-sqs-ext-client)
@@ -111,6 +119,77 @@
           (is (contains? stats :stopped-at))))
       (close! handler-chan))))
 
+(deftest handle-queue-terminates-after-restart-count-exceeded
+  (testing "handle-queue terminates when the restart-count exceeds the limit"
+    (let [handler-chan (chan)]
+      (fixtures/with-test-standard-queue
+        ;; WATCHOUT: We redefine receive-message to permanently cause an error to be handled,
+        ;;           which is recoverable by restarting and should cause the loop to be restarted
+        ;;           by an amount of times that fits the restart-limit and delay settings.
+        (with-redefs-fn {#'sqs/receive-message
+                         (fn [_ _ _] (HttpTimeoutException.
+                                       "Testing permanent network failure"))}
+          #(let [restart-limit 3
+                 restart-delay-seconds 1
+                 stop-fn (fixtures/with-handle-queue-queue-opts-standard-no-autostop
+                           handler-chan
+                           {:restart-limit         restart-limit
+                            :restart-delay-seconds restart-delay-seconds})]
+             (Thread/sleep (+ (* restart-limit (* restart-delay-seconds 1000)) 500))
+             (let [stats (stop-fn)]
+               (is (= (:restart-count stats) restart-limit))))))
+      (close! handler-chan))))
+
+(deftest handle-queue-restarts-if-recoverable-errors-occurs
+  (testing "handle-queue restarts properly and continues running upon recoverable error"
+    (let [handler-chan (chan)
+          receive-message sqs/receive-message
+          called-counter (atom 0)]
+      (fixtures/with-test-standard-queue
+        ;; WATCHOUT: To test a temporary error, we redefine receive-message to throw
+        ;;           an error once and afterwards do what the original function did,
+        ;;           which we saved previously:
+        (with-redefs-fn {#'sqs/receive-message
+                         (fn [sqs-client queue-name opts]
+                           (swap! called-counter inc)
+                           (if (= @called-counter 1)
+                             (HttpTimeoutException. "Testing temporary network failure")
+                             (receive-message sqs-client queue-name opts)))}
+          #(let [restart-delay-seconds 1
+                 stop-fn (fixtures/with-handle-queue-queue-opts-standard-no-autostop
+                           handler-chan
+                           {:restart-delay-seconds restart-delay-seconds})]
+             ;; give the loop some time to handle that error ...
+             (Thread/sleep (+ (* restart-delay-seconds 1000) 500))
+
+             ;; verify that sending/receiving still works ...
+             (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
+                                                fixtures/test-standard-queue-name
+                                                test-message-with-time)))
+             (is (= test-message-with-time (:body (<!! handler-chan))))
+             (let [stats (stop-fn)]
+               ;; ... and that the loop was actually restarted ...
+               (is (= (:restart-count stats) 1))
+               ;; ... but terminated properly
+               (is (contains? stats :stopped-at))))))
+      (close! handler-chan))))
+
+(deftest handle-queue-terminates-upon-unrecoverable-error-occured
+  (testing "handle-queue terminates when an error occured that was considered fatal/unrecoverable"
+    (let [handler-chan (chan)]
+      (fixtures/with-test-standard-queue
+        ;; WATCHOUT: We redefine receive-message to permanently cause an error to be handled,
+        ;;           which is not recoverable by restarting and therefore terminates the loop.
+        (with-redefs-fn {#'sqs/receive-message
+                         (fn [_ _ _]
+                           (RuntimeException. "Testing runtime error"))}
+          #(let [stats (fixtures/with-handle-queue-standard
+                         handler-chan)]
+             (Thread/sleep 500)
+             (is (= (:restart-count stats) 0))
+             (is (contains? stats :stopped-at)))))
+      (close! handler-chan))))
+
 (deftest handle-queue-terminates-with-non-existing-bucket
   (testing "handle-queue terminates when non-existing bucket is used"
     (let [handler-chan (chan)]
@@ -141,7 +220,7 @@
                                              (first test-messages-basic)
                                              {:format format})))
           (is (= (first test-messages-basic) (:body (<!! out-chan))))
-          ;; Terminate receive loop and thereby close the out-channel
+          ;; terminate receive loop and thereby close the out-channel
           (stop-fn)
           (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
                                              fixtures/test-standard-queue-name
@@ -152,39 +231,63 @@
 
 (deftest done-fn-handle-present-when-auto-delete-false
   (testing "done-fn handle is present in response when auto-delete is false"
-    (doseq [format [:transit]]
-      (let [handler-chan (chan)]
-        (fixtures/with-test-standard-queue
-          (fixtures/with-handle-queue-queue-opts-standard
-            handler-chan
-            {:format format
-             :auto-delete false}
+    (let [handler-chan (chan)]
+      (fixtures/with-test-standard-queue
+        (fixtures/with-handle-queue-queue-opts-standard
+          handler-chan
+          {:auto-delete false}
 
-            (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
-                                               fixtures/test-standard-queue-name
-                                               (first test-messages-basic)
-                                               {:format format})))
-            (let [received-message (<!! handler-chan)]
-              (is (= (first test-messages-basic) (:body received-message)))
-              (is (contains? received-message :done-fn))
-              (is (fn? (:done-fn received-message))))))
-        (close! handler-chan)))))
+          (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
+                                             fixtures/test-standard-queue-name
+                                             (last test-messages-basic))))
+          (let [received-message (<!! handler-chan)]
+            (is (= (last test-messages-basic) (:body received-message)))
+
+            ;; function handle is properly returned ...
+            (is (contains? received-message :done-fn))
+            (is (fn? (:done-fn received-message)))
+
+            ;; ... and can be used to delete the message now
+            (is ((:done-fn received-message))))))
+
+      (close! handler-chan))))
 
 (deftest done-fn-handle-absent-when-auto-delete-true
   (testing "done-fn handle is not present in response when auto-delete is true"
-    (doseq [format [:transit :json]]
-      (let [handler-chan (chan)]
-        (fixtures/with-test-standard-queue
-          (fixtures/with-handle-queue-queue-opts-standard
-            handler-chan
-            {:format format
-             :auto-delete true}
+    (let [handler-chan (chan)]
+      (fixtures/with-test-standard-queue
+        (fixtures/with-handle-queue-queue-opts-standard
+          handler-chan
+          {:auto-delete true}
 
-            (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
-                                               fixtures/test-standard-queue-name
-                                               (first test-messages-basic)
-                                               {:format format})))
-            (let [received-message (<!! handler-chan)]
-              (is (= (first test-messages-basic) (:body received-message)))
-              (is (not (contains? received-message :done-fn))))))
-        (close! handler-chan)))))
+          (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
+                                             fixtures/test-standard-queue-name
+                                             (first test-messages-basic))))
+          (let [received-message (<!! handler-chan)]
+            (is (= (first test-messages-basic) (:body received-message)))
+
+            ;; no handle present because the message was already auto-deleted
+            (is (not (contains? received-message :done-fn)))
+
+            ;; make sure we don't try to delete it before the library got its
+            ;; chance to do so
+            (Thread/sleep 500)
+
+            ;; attempting to delete it now should yield an exception because its
+            ;; already not there anymore
+            (is (thrown-with-msg? AmazonSQSException
+                                  #"^.*Status Code: 400; Error Code: 400.*$"
+                                  (sqs/delete-message @fixtures/test-sqs-ext-client
+                                                      fixtures/test-standard-queue-name
+                                                      received-message))))))
+      (close! handler-chan))))
+
+(deftest recoverable-errors-get-judged-properly
+  (testing "error-might-be-recovered-by-restarting? judges errors correctly"
+    (are [severity error]
+      (= severity (receive/error-might-be-recovered-by-restarting? error))
+      true (UnknownHostException.)
+      true (SocketException.)
+      true (HttpTimeoutException. "test")
+      false (RuntimeException.)
+      false (ReflectiveOperationException.))))
