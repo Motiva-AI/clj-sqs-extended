@@ -15,8 +15,8 @@ $ make devel
 
 ```clj
 (require '[clojure.tools.logging :as log]
- '[clj-sqs-extended.core :as sqs-ext]
- '[clj-sqs-extended.test-helpers :as helpers])
+         '[clj-sqs-extended.aws.s3 :as s3]
+         '[clj-sqs-extended.core :as sqs-ext])
 
 (import '[java.util.concurrent CountDownLatch])
 
@@ -33,11 +33,24 @@ $ make devel
   :s3-bucket-name            "name-of-existing-bucket-to-use"
   :number-of-handler-threads 1})
 
+(defn random-string-with-length
+  [length]
+  (->> (repeatedly #(char (+ 32 (rand 94))))
+       (take length)
+       (apply str)))
+
+(defn random-message-larger-than-256kb
+  []
+  {:id      (rand-int 65535)
+   :payload (random-string-with-length 300000)})
+
 (defn dispatch-action-service
   ([message]
-   (log/infof "I got %s." (:body message)))
+   (log/infof "I got '%s'..."
+              (subs (get-in message [:body :payload]) 0 32)))
   ([message done-fn]
-   (log/infof "I got %s." (:body message))
+   (log/infof "I got '%s'..."
+              (subs (get-in message [:body :payload]) 0 32))
    (done-fn)))
 
 (defn start-action-service-queue-listener
@@ -63,18 +76,23 @@ $ make devel
 
 (defn run-example
   []
-  (let [sqs-ext-client (sqs-ext/sqs-ext-client aws-config
-                                               (:s3-bucket-name queue-config))]
+  (let [s3-client (s3/s3-client aws-config)]
+    (s3/create-bucket s3-client (:s3-bucket-name
+                                 queue-config))
+    (let [sqs-ext-client (sqs-ext/sqs-ext-client aws-config
+                                                 (:s3-bucket-name queue-config))]
+      (sqs-ext/create-standard-queue sqs-ext-client
+                                     (:queue-name queue-config))
 
-    ;; Start processing all received messages ...
-    (future (start-worker))
+      ;; Start processing all received messages ...
+      (future (start-worker))
 
-    ;; Send a large test message that requires S3 usage to store ...
-    (let [message (helpers/random-message-larger-than-256kb)]
-      (log/infof "Sent message with ID '%s'."
-                 (sqs-ext/send-message sqs-ext-client
-                                       (:queue-name queue-config)
-                                       message)))))
+      ;; Send a large test message that requires S3 usage to store ...
+      (let [message (random-message-larger-than-256kb)]
+        (log/infof "Sent message with ID '%s'."
+                   (sqs-ext/send-message sqs-ext-client
+                                         (:queue-name queue-config)
+                                         message))))))
 ```
 
 ## Development
