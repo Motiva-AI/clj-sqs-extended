@@ -7,11 +7,11 @@
             [clj-sqs-extended.test-helpers :as helpers]))
 
 
-(def aws-config {:aws-access-key-id     (env :aws-access-key-id)
-                 :aws-secret-access-key (env :aws-secret-access-key)
-                 :aws-s3-endpoint-url   (env :aws-s3-endpoint-url)
-                 :aws-sqs-endpoint-url  (env :aws-sqs-endpoint-url)
-                 :aws-region            (env :aws-region)})
+(def aws-config {:access-key   (env :access-key)
+                 :secret-key   (env :secret-key)
+                 :s3-endpoint  (env :s3-endpoint)
+                 :sqs-endpoint (env :sqs-endpoint)
+                 :region       (env :region)})
 
 (defonce test-sqs-ext-client (atom nil))
 (defonce test-standard-queue-name (helpers/random-queue-name))

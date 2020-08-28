@@ -32,11 +32,11 @@
 
   Arguments:
     aws-creds - A map of the following optional keys used for accessing AWS services:
-      aws-access-key-id     - AWS access key ID
-      aws-secret-access-key - AWS secret access key
-      aws-s3-endpoint-url   - AWS S3 endpoint (protocol://service-code.region-code.amazonaws.com)
-      aws-sqs-endpoint-url  - AWS SQS endpoint (protocol://service-code.region-code.amazonaws.com)
-      aws-region            - AWS region
+      access-key     - AWS access key ID
+      secret-key - AWS secret access key
+      s3-endpoint   - AWS S3 endpoint (protocol://service-code.region-code.amazonaws.com)
+      sqs-endpoint  - AWS SQS endpoint (protocol://service-code.region-code.amazonaws.com)
+      region            - AWS region
 
     queue-opts - A map for the configuration settings of the queue to handle:
       queue-name            - A string containing the name of the queue to handle (required)
@@ -68,16 +68,16 @@
     A stop function - Call this function to terminate the loop and receive some final
                       information about the finished handling process (hopefully handy for
                       debugging)."
-  [{:keys [aws-access-key-id
-           aws-secret-access-key
-           aws-s3-endpoint-url
-           aws-sqs-endpoint-url
-           aws-region]
-    :or   {aws-access-key-id     "default"
-           aws-secret-access-key "default"
-           aws-s3-endpoint-url   "http://localhost:4566"
-           aws-sqs-endpoint-url  "http://localhost:4566"
-           aws-region            "us-east-2"}
+  [{:keys [access-key
+           secret-key
+           s3-endpoint
+           sqs-endpoint
+           region]
+    :or   {access-key     "default"
+           secret-key "default"
+           s3-endpoint   "http://localhost:4566"
+           sqs-endpoint  "http://localhost:4566"
+           region            "us-east-2"}
     :as   aws-creds}
    {:keys [queue-name
            s3-bucket-name

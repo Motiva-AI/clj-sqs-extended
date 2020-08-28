@@ -29,11 +29,11 @@
 
                    :plugins [[lein-environ "1.2.0"]]
 
-                   :env {:aws-access-key-id          "default"
-                         :aws-secret-access-key      "default"
-                         :aws-sqs-endpoint-url       "http://localhost:4566"
-                         :aws-s3-endpoint-url        "http://localhost:4566"
-                         :aws-region                 "us-east-2"
+                   :env {:access-key          "default"
+                         :secret-key      "default"
+                         :sqs-endpoint       "http://localhost:4566"
+                         :s3-endpoint        "http://localhost:4566"
+                         :region                 "us-east-2"
                          :integration-aws-access-key ""
                          :integration-aws-secret-key ""}}}
 

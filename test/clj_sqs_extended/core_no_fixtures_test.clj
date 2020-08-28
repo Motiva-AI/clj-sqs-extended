@@ -10,17 +10,17 @@
             SdkClientException]))
 
 
-(def ^:private aws-down-config {:aws-access-key-id     (env :aws-access-key-id)
-                                :aws-secret-access-key (env :aws-secret-access-key)
-                                :aws-s3-endpoint-url   "https://currently-unreachable-aws-endpoint.com"
-                                :aws-sqs-endpoint-url  "https://currently-unreachable-aws-endpoint.com"
-                                :aws-region            (env :aws-region)})
+(def ^:private aws-down-config {:access-key     (env :access-key)
+                                :secret-key (env :secret-key)
+                                :s3-endpoint   "https://currently-unreachable-aws-endpoint.com"
+                                :sqs-endpoint  "https://currently-unreachable-aws-endpoint.com"
+                                :region            (env :region)})
 
-(def ^:private aws-up-config {:aws-access-key-id     (env :aws-access-key-id)
-                              :aws-secret-access-key (env :aws-secret-access-key)
-                              :aws-s3-endpoint-url   (env :aws-s3-endpoint-url)
-                              :aws-sqs-endpoint-url  (env :aws-sqs-endpoint-url)
-                              :aws-region            (env :aws-region)})
+(def ^:private aws-up-config {:access-key     (env :access-key)
+                              :secret-key (env :secret-key)
+                              :s3-endpoint   (env :s3-endpoint)
+                              :sqs-endpoint  (env :sqs-endpoint)
+                              :region            (env :region)})
 
 (deftest unreachable-endpoint-yields-proper-exception
   (testing "Trying to connect to an unreachable endpoint yields a proper exception"

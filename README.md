@@ -22,11 +22,11 @@ $ make devel
 
 
 (def aws-config
- {:aws-access-key-id     "your-access-key"
-  :aws-secret-access-key "your-secret-key"
-  :aws-s3-endpoint-url   "https://localhost:4566"
-  :aws-sqs-endpoint-url  "https://localhost:4566"
-  :aws-region            "us-east-2"})
+ {:access-key     "your-access-key"
+  :secret-key "your-secret-key"
+  :s3-endpoint   "https://localhost:4566"
+  :sqs-endpoint  "https://localhost:4566"
+  :region            "us-east-2"})
 
 (def queue-config
  {:queue-name          "some-unique-queue-name-to-use"
