@@ -1,5 +1,5 @@
 (ns clj-sqs-extended.internal.receive
-  (:require [clojure.core.async :refer [chan go go-loop close! <! >!]]
+  (:require [clojure.core.async :refer [go go-loop close! <! >!]]
             [clojure.tools.logging :as log]
             [tick.alpha.api :as t]
             [clj-sqs-extended.aws.sqs :as sqs])
@@ -71,8 +71,8 @@
 
 (defn- restart-limit-reached?
   [loop-state limit]
-  (when (> (get-in @loop-state [:stats :restart-count])
-           limit)))
+  (> (get-in @loop-state [:stats :restart-count])
+     limit))
 
 (def ^:private restart-limit-not-reached?
   (complement restart-limit-reached?))
@@ -145,7 +145,7 @@
                                           restart-delay-seconds
                                           receive-opts)
 
-           (not (empty? message))
+           (seq message)
            (process-message sqs-ext-client
                             loop-state
                             message
@@ -157,4 +157,3 @@
                     (:stats @loop-state))))
 
      (partial stop-receive-loop loop-state))))
-

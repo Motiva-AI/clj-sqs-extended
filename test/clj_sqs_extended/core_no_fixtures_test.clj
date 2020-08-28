@@ -1,6 +1,5 @@
 (ns clj-sqs-extended.core-no-fixtures-test
-  (:require [clojure.test :refer :all]
-            [clojure.core.async :refer [chan <!!]]
+  (:require [clojure.test :refer [deftest testing is]]
             [environ.core :refer [env]]
             [clj-sqs-extended.aws.sqs :as sqs]
             [clj-sqs-extended.core :as sqs-ext]

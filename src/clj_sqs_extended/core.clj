@@ -1,5 +1,5 @@
 (ns clj-sqs-extended.core
-  (:require [clojure.core.async :refer [chan <! >! <!! thread]]
+  (:require [clojure.core.async :refer [chan <!! thread]]
             [clojure.tools.logging :as log]
             [clj-sqs-extended.internal.receive :as receive]
             [clj-sqs-extended.aws.sqs :as sqs]))
@@ -40,8 +40,8 @@
 
     queue-opts - A map for the configuration settings of the queue to handle:
       queue-name            - A string containing the name of the queue to handle (required)
-      s3-bucket-name        - A string containing the name of an existing S3 bucket to use to store
-                              large messages (required)
+      s3-bucket-name        - A string containing the name of an existing S3 bucket to use
+                              (required for sending/receiving messages > 256kb)
       num-handler-threads   - Number of how many threads to run for handling message receival
                               (optional, default: 4)
       restart-limit         - If a potentially non-fatal error occurs while handling the queue,

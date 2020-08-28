@@ -1,6 +1,7 @@
 (ns clj-sqs-extended.core-test
-  (:require [clojure.test :refer :all]
+  (:require [clojure.test :refer [use-fixtures deftest testing is are]]
             [clojure.core.async :refer [chan close! <!!]]
+            [clojure.core.async.impl.protocols :refer [closed?]]
             [clj-sqs-extended.aws.sqs :as sqs]
             [clj-sqs-extended.core :as sqs-ext]
             [clj-sqs-extended.internal.receive :as receive]
