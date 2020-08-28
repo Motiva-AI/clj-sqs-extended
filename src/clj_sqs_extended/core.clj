@@ -32,11 +32,11 @@
 
   Arguments:
     aws-creds - A map of the following optional keys used for accessing AWS services:
-      access-key     - AWS access key ID
-      secret-key - AWS secret access key
-      s3-endpoint   - AWS S3 endpoint (protocol://service-code.region-code.amazonaws.com)
-      sqs-endpoint  - AWS SQS endpoint (protocol://service-code.region-code.amazonaws.com)
-      region            - AWS region
+      access-key   - AWS access key ID
+      secret-key   - AWS secret access key
+      s3-endpoint  - AWS S3 endpoint (protocol://service-code.region-code.amazonaws.com)
+      sqs-endpoint - AWS SQS endpoint (protocol://service-code.region-code.amazonaws.com)
+      region       - AWS region
 
     queue-opts - A map for the configuration settings of the queue to handle:
       queue-name            - A string containing the name of the queue to handle (required)
@@ -73,11 +73,11 @@
            s3-endpoint
            sqs-endpoint
            region]
-    :or   {access-key     "default"
-           secret-key "default"
-           s3-endpoint   "http://localhost:4566"
-           sqs-endpoint  "http://localhost:4566"
-           region            "us-east-2"}
+    :or   {access-key   "default"
+           secret-key   "default"
+           s3-endpoint  "http://localhost:4566"
+           sqs-endpoint "http://localhost:4566"
+           region       "us-east-2"}
     :as   aws-creds}
    {:keys [queue-name
            s3-bucket-name

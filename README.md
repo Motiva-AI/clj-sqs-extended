@@ -22,11 +22,11 @@ $ make devel
 
 
 (def aws-config
- {:access-key     "your-access-key"
-  :secret-key "your-secret-key"
-  :s3-endpoint   "https://localhost:4566"
-  :sqs-endpoint  "https://localhost:4566"
-  :region            "us-east-2"})
+ {:access-key   "your-access-key"
+  :secret-key   "your-secret-key"
+  :s3-endpoint  "https://localhost:4566"
+  :sqs-endpoint "https://localhost:4566"
+  :region       "us-east-2"})
 
 (def queue-config
  {:queue-name          "some-unique-queue-name-to-use"
@@ -90,4 +90,3 @@ Tests are run inside a CircleCI Docker container on localhost.
 ```
 $ make test
 ```
-
