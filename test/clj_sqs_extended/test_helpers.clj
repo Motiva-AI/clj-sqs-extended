@@ -3,9 +3,6 @@
             [clj-sqs-extended.aws.sqs :as sqs])
   (:import [java.util UUID]))
 
-
-(def purge-queue sqs/purge-queue)
-
 (defn random-bucket-name
   []
   (str (UUID/randomUUID)
