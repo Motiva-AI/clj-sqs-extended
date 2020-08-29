@@ -45,5 +45,5 @@
                    (sqs-ext/send-message sqs-ext-client
                                          "test-queue"
                                          (helpers/random-message-larger-than-256kb))))
-      (sqs/delete-queue sqs-ext-client
+      (sqs/delete-queue! sqs-ext-client
                         "test-queue"))))

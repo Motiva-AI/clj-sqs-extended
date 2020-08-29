@@ -25,8 +25,8 @@
   (f)
   ;; TODO: https://github.com/Motiva-AI/clj-sqs-extended/issues/27
   (Thread/sleep 500)
-  (sqs/delete-queue @test-sqs-ext-client
-                    test-standard-queue-name))
+  (sqs/delete-queue! @test-sqs-ext-client
+                     test-standard-queue-name))
 
 (defmacro with-test-standard-queue
   [& body]
@@ -39,7 +39,7 @@
   (f)
   ;; TODO: https://github.com/Motiva-AI/clj-sqs-extended/issues/27
   (Thread/sleep 500)
-  (sqs/delete-queue @test-sqs-ext-client
+  (sqs/delete-queue! @test-sqs-ext-client
                     test-fifo-queue-name))
 
 (defmacro with-test-fifo-queue

@@ -11,7 +11,7 @@
 (def create-fifo-queue sqs/create-fifo-queue)
 (def send-message sqs/send-message)
 (def send-fifo-message sqs/send-fifo-message)
-
+(def receive-loop receive/receive-loop)
 
 (defn- launch-handler-threads
   [number-of-handler-threads receive-chan auto-delete handler-fn]

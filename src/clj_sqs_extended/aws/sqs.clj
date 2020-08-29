@@ -80,12 +80,12 @@
   (->> (.getQueueUrl sqs-client name)
        (.getQueueUrl)))
 
-(defn delete-queue
+(defn delete-queue!
   [sqs-client name]
   (let [url (queue-name-to-url sqs-client name)]
     (.deleteQueue sqs-client url)))
 
-(defn purge-queue
+(defn purge-queue!
   [sqs-client name]
   (let [url (queue-name-to-url sqs-client name)]
     (->> (PurgeQueueRequest. url)
