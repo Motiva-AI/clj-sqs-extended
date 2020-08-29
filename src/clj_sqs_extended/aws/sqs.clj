@@ -51,75 +51,65 @@
      (.createQueue sqs-client request))))
 
 (defn create-standard-queue
-  ([sqs-client name]
-   (create-queue sqs-client name {}))
+  ([sqs-client queue-name]
+   (create-queue sqs-client queue-name {}))
 
   ([sqs-client
-    name
+    queue-name
     {:keys [kms-master-key-id
             kms-data-key-reuse-period]
      :as   opts}]
-   (create-queue sqs-client name opts)))
+   (create-queue sqs-client queue-name opts)))
 
 (defn create-fifo-queue
-  ([sqs-client name]
-   (create-queue sqs-client name {:fifo true}))
+  ([sqs-client queue-name]
+   (create-queue sqs-client queue-name {:fifo true}))
 
-  ([sqs-client name
+  ([sqs-client queue-name
     {:keys [fifo
             kms-master-key-id
             kms-data-key-reuse-period]
      :or   {fifo true}
      :as   opts}]
-   (create-queue sqs-client name opts)))
-
-(defn queue-name-to-url
-  [sqs-client name]
-  ;; WATCHOUT: Yes, there will be a GetQueueUrlResult returned for which getQueueUrl
-  ;;           has to be called again.
-  (->> (.getQueueUrl sqs-client name)
-       (.getQueueUrl)))
+   (create-queue sqs-client queue-name opts)))
 
 (defn delete-queue!
-  [sqs-client name]
-  (let [url (queue-name-to-url sqs-client name)]
-    (.deleteQueue sqs-client url)))
+  [sqs-client queue-url]
+  (.deleteQueue sqs-client queue-url))
 
 (defn purge-queue!
-  [sqs-client name]
-  (let [url (queue-name-to-url sqs-client name)]
-    (->> (PurgeQueueRequest. url)
-         (.purgeQueue sqs-client))))
+  [sqs-client queue-url]
+  (->> (PurgeQueueRequest. queue-url)
+       (.purgeQueue sqs-client)))
 
 (defn send-message
   "Send a message to a standard queue.
 
   Argments:
     sqs-client       - The extended sqs-client via which the request shall be sent
-    queue-name       - A string containing the name of the queue where the message shall be sent to
+    queue-url        - the queue's URL
     message          - The actual message/data to be sent
 
   Options:
     format           - The format (currently :json or :transit) to serialize outgoing
                        messages with (optional, default: :transit)"
-  ([sqs-client queue-name message]
-   (send-message sqs-client queue-name message {}))
+  ([sqs-client queue-url message]
+   (send-message sqs-client queue-url message {}))
 
-  ([sqs-client queue-name message
+  ([sqs-client queue-url message
     {:keys [format]
      :or   {format :transit}}]
-   (let [url (queue-name-to-url sqs-client queue-name)]
-     (->> (serdes/serialize message format)
-          (SendMessageRequest. url)
+   (->> (serdes/serialize message format)
+          (SendMessageRequest. queue-url)
           (.sendMessage sqs-client)
-          (.getMessageId)))))
+          (.getMessageId))))
 
 (defn send-fifo-message
   "Send a message to a FIFO queue.
 
   Argments:
     sqs-client       - The extended sqs-client via which the request shall be sent
-    queue-name       - A string containing the name of the queue where the message shall be sent to
+    queue-url        - the queue's URL
     message          - The actual message/data to be sent
     message-group-id - A string that specifies the group that this message belongs to.
                        Messages belonging to the same group are guaranteed FIFO
@@ -128,16 +118,15 @@
     format           - The format (currently :json or :transit) to serialize outgoing
                        messages with (optional, default: :transit)
     deduplication-id - A string used for deduplication of sent messages"
-  ([sqs-client queue-name message group-id]
-   (send-fifo-message sqs-client queue-name message group-id {}))
+  ([sqs-client queue-url message group-id]
+   (send-fifo-message sqs-client queue-url message group-id {}))
 
-  ([sqs-client queue-name message group-id
+  ([sqs-client queue-url message group-id
     {:keys [format
             deduplication-id]
      :or   {format :transit}}]
-   (let [url (queue-name-to-url sqs-client queue-name)
-         request (->> (serdes/serialize message format)
-                      (SendMessageRequest. url))]
+   (let [request (->> (serdes/serialize message format)
+                      (SendMessageRequest. queue-url))]
      ;; WATCHOUT: The group ID is mandatory when sending fifo messages.
      (doto request (.setMessageGroupId group-id))
      (when deduplication-id
@@ -148,16 +137,15 @@
           (.getMessageId)))))
 
 (defn delete-message
-  [sqs-client queue-name message]
-  (let [url (queue-name-to-url sqs-client queue-name)]
-    (->> (DeleteMessageRequest. url (:receiptHandle message))
-         (.deleteMessage sqs-client))))
+  [sqs-client queue-url message]
+  (->> (DeleteMessageRequest. queue-url (:receiptHandle message))
+       (.deleteMessage sqs-client)))
 
 (defn receive-message
-  ([sqs-client queue-name]
-   (receive-message sqs-client queue-name {}))
+  ([sqs-client queue-url]
+   (receive-message sqs-client queue-url {}))
 
-  ([sqs-client queue-name
+  ([sqs-client queue-url
     {:keys [format
             wait-time]
      :or   {format    :transit
@@ -167,8 +155,7 @@
                (-> (bean message)
                    (select-keys [:messageId :receiptHandle :body]))
                {}))]
-     (let [url (queue-name-to-url sqs-client queue-name)
-           request (doto (ReceiveMessageRequest. url)
+     (let [request (doto (ReceiveMessageRequest. queue-url)
                      (.setWaitTimeSeconds (int wait-time))
                      ;; WATCHOUT: This is a design choice to read one message at a time from the queue
                      (.setMaxNumberOfMessages (int 1)))
@@ -179,11 +166,11 @@
          message)))))
 
 (defn- receive-to-channel
-  [sqs-client queue-name opts]
+  [sqs-client queue-url opts]
   (let [ch (chan)]
     (go-loop []
       (try
-        (let [message (receive-message sqs-client queue-name opts)]
+        (let [message (receive-message sqs-client queue-url opts)]
           (>! ch message))
         (catch Throwable e
           (>! ch e)))
@@ -203,21 +190,21 @@
     ch))
 
 (defn receive-message-channeled
-  ([sqs-client queue-name]
-   (receive-message-channeled sqs-client queue-name {}))
+  ([sqs-client queue-url]
+   (receive-message-channeled sqs-client queue-url {}))
 
-  ([sqs-client queue-name
+  ([sqs-client queue-url
     {:keys [num-consumers
             format]
      :or   {num-consumers 1
             format        :transit}
      :as   opts}]
    (if (= num-consumers 1)
-     (receive-to-channel sqs-client queue-name opts)
+     (receive-to-channel sqs-client queue-url opts)
      (multiplex
        (loop [chs []
               n num-consumers]
          (if (= n 0)
            chs
-           (let [ch (receive-to-channel sqs-client queue-name opts)]
+           (let [ch (receive-to-channel sqs-client queue-url opts)]
              (recur (conj chs ch) (dec n)))))))))
