@@ -54,7 +54,11 @@
   ([sqs-client name]
    (create-queue sqs-client name {}))
 
-  ([sqs-client name opts]
+  ([sqs-client
+    name
+    {:keys [kms-master-key-id
+            kms-data-key-reuse-period]
+     :as   opts}]
    (create-queue sqs-client name opts)))
 
 (defn create-fifo-queue
