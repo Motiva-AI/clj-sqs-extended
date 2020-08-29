@@ -1,5 +1,5 @@
 (ns clj-sqs-extended.test-fixtures
-  (:require [clojure.core.async :refer [chan close! >!!]]
+  (:require [clojure.core.async :refer [>!!]]
             [environ.core :refer [env]]
             [clj-sqs-extended.core :as sqs-ext]
             [clj-sqs-extended.aws.s3 :as s3]

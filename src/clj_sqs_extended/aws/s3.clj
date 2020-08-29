@@ -10,12 +10,12 @@
 (defn s3-client
   [aws-config]
   (let [endpoint (aws/configure-s3-endpoint aws-config)
-        creds (aws/configure-credentials aws-config)]
-    (let [builder (-> (AmazonS3ClientBuilder/standard)
-                      (.withPathStyleAccessEnabled true))
-          builder (if endpoint (.withEndpointConfiguration builder endpoint) builder)
-          builder (if creds (.withCredentials builder creds) builder)]
-      (.build builder))))
+        creds (aws/configure-credentials aws-config)
+        builder (-> (AmazonS3ClientBuilder/standard)
+                    (.withPathStyleAccessEnabled true))
+        builder (if endpoint (.withEndpointConfiguration builder endpoint) builder)
+        builder (if creds (.withCredentials builder creds) builder)]
+    (.build builder)))
 
 (defn configure-bucket-lifecycle
   [status expiration-days]
