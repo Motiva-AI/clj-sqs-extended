@@ -29,9 +29,9 @@ $ make devel
   :aws-region            "us-east-2"})
 
 (def queue-config
- {:queue-name          "some-unique-queue-name-to-use"
-  :s3-bucket-name      "some-unique-bucket-name-to-use"
-  :num-handler-threads 1})
+ {:queue-name                "name-of-existing-queue-to-use"
+  :s3-bucket-name            "name-of-existing-bucket-to-use"
+  :number-of-handler-threads 1})
 
 (defn dispatch-action-service
   ([message]
@@ -90,4 +90,3 @@ Tests are run inside a CircleCI Docker container on localhost.
 ```
 $ make test
 ```
-

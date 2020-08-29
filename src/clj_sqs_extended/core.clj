@@ -14,8 +14,8 @@
 
 
 (defn- launch-handler-threads
-  [num-handler-threads receive-chan auto-delete handler-fn]
-  (dotimes [_ num-handler-threads]
+  [number-of-handler-threads receive-chan auto-delete handler-fn]
+  (dotimes [_ number-of-handler-threads]
     (thread
       (loop []
         (when-let [message (<!! receive-chan)]
@@ -39,24 +39,23 @@
       aws-region            - AWS region
 
     queue-opts - A map for the configuration settings of the queue to handle:
-      queue-name            - A string containing the name of the queue to handle (required)
-      s3-bucket-name        - A string containing the name of an existing S3 bucket to use
-                              (required for sending/receiving messages > 256kb)
-      num-handler-threads   - Number of how many threads to run for handling message receival
-                              (optional, default: 4)
-      restart-limit         - If a potentially non-fatal error occurs while handling the queue,
-                              it will try this many times to restart in order to hopefully recover
-                              from the occured error (optional, default: 6)
-      restart-delay-seconds - If the loop restarts, restart will be delayed by this many seconds
-                              (optional, default: 10)
-      auto-delete           - A boolean where
-                                true: will immediately delete the message
-
-                                false: will provide a `done-fn` key inside the returned messages and
-                                       the message will be left untouched by this API
-                                (optional, defaults: true)
-      format                - The format (currently :json or :transit) to serialize outgoing messages
-                              with (optional, default: :transit)
+      queue-name                - A string containing the name of the queue to handle (required)
+      s3-bucket-name            - A string containing the name of an existing S3 bucket to use to store
+                                  large messages (required)
+      number-of-handler-threads - Number of how many threads to run for handling message receival
+                                  (optional, default: 4)
+      restart-limit             - If a potentially non-fatal error occurs while handling the queue,
+                                  it will try this many times to restart in order to hopefully recover
+                                  from the occured error (optional, default: 6)
+      restart-delay-seconds     - If the loop restarts, restart will be delayed by this many seconds
+                                  (optional, default: 10)
+      auto-delete               - A boolean where
+                                  true: will immediately delete the message
+                                  false: will provide a `done-fn` key inside the returned messages and
+                                         the message will be left untouched by this API
+                                  (optional, defaults: true)
+      format                    - The format (currently :json or :transit) to serialize outgoing messages
+                                  with (optional, default: :transit)
 
     handler-fn - A function to which new incoming messages will be passed to (required)
 
@@ -81,16 +80,16 @@
     :as   aws-creds}
    {:keys [queue-name
            s3-bucket-name
-           num-handler-threads
+           number-of-handler-threads
            restart-limit
            restart-delay-seconds
            auto-delete
            format]
-    :or   {num-handler-threads   4
-           restart-limit         6
-           restart-delay-seconds 10
-           auto-delete           true
-           format                :transit}}
+    :or   {number-of-handler-threads 4
+           restart-limit             6
+           restart-delay-seconds     10
+           auto-delete               true
+           format                    :transit}}
    handler-fn]
   (let [sqs-ext-client (sqs/sqs-ext-client aws-creds s3-bucket-name)
         receive-chan (chan)
@@ -103,19 +102,19 @@
                                        :format                format})]
     (log/infof (str "Now handling queue '%s' with:\n"
                     "  bucket: %s\n"
-                    "  num-handler-threads: %d\n"
+                    "  number-of-handler-threads: %d\n"
                     "  restart-limit: %d\n"
                     "  restart-delay-seconds: %d\n"
                     "  auto-delete: %s\n"
                     "  format: %s")
                queue-name
                s3-bucket-name
-               num-handler-threads
+               number-of-handler-threads
                restart-limit
                restart-delay-seconds
                auto-delete
                format)
-    (launch-handler-threads num-handler-threads
+    (launch-handler-threads number-of-handler-threads
                             receive-chan
                             auto-delete
                             handler-fn)
