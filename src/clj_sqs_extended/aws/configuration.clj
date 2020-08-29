@@ -8,24 +8,24 @@
 
 
 (defn configure-sqs-endpoint
-  [{:keys [aws-sqs-endpoint-url aws-region]}]
+  [{:keys [sqs-endpoint region]}]
   ;; WATCHOUT: A specific endpoint is optional in this API, so if the necessary
   ;;           information does not get passed here, this will return nil
   ;;           and the API will use the default endpoint instead.
-  (when (and (some? aws-sqs-endpoint-url) (some? aws-region))
-    (AwsClientBuilder$EndpointConfiguration. aws-sqs-endpoint-url aws-region)))
+  (when (and (some? sqs-endpoint) (some? region))
+    (AwsClientBuilder$EndpointConfiguration. sqs-endpoint region)))
 
 (defn configure-s3-endpoint
-  [{:keys [aws-s3-endpoint-url aws-region]}]
+  [{:keys [s3-endpoint region]}]
   ;; WATCHOUT: A specific endpoint is optional in this API, so if the necessary
   ;;           information does not get passed here, this will return nil
   ;;           and the API will use the default endpoint instead.
-  (when (and (some? aws-s3-endpoint-url) (some? aws-region))
-    (AwsClientBuilder$EndpointConfiguration. aws-s3-endpoint-url aws-region)))
+  (when (and (some? s3-endpoint) (some? region))
+    (AwsClientBuilder$EndpointConfiguration. s3-endpoint region)))
 
 (defn configure-credentials
-  [{:keys [aws-access-key-id aws-secret-access-key]}]
-  (if (and (some? aws-access-key-id ) (some? aws-secret-access-key))
-    (->> (BasicAWSCredentials. aws-access-key-id  aws-secret-access-key)
+  [{:keys [access-key secret-key]}]
+  (if (and (some? access-key ) (some? secret-key))
+    (->> (BasicAWSCredentials. access-key  secret-key)
          (AWSStaticCredentialsProvider.))
     (DefaultAWSCredentialsProviderChain.)))
