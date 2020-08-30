@@ -6,11 +6,36 @@
 
 
 ;; Conveniance declarations
-(def create-standard-queue sqs/create-standard-queue)
-(def create-fifo-queue sqs/create-fifo-queue)
-(def send-message sqs/send-message)
-(def send-fifo-message sqs/send-fifo-message)
-(def receive-loop receive/receive-loop)
+;; TODO DRY, use a macro for these redefs
+(defn create-standard-queue
+  [aws-creds & args]
+  (apply sqs/create-standard-queue
+         (sqs/sqs-ext-client aws-creds)
+         args))
+
+(defn create-fifo-queue
+  [aws-creds & args]
+  (apply sqs/create-fifo-queue
+         (sqs/sqs-ext-client aws-creds)
+         args))
+
+(defn send-message
+  [aws-creds & args]
+  (apply sqs/send-message
+         (sqs/sqs-ext-client aws-creds)
+         args))
+
+(defn send-fifo-message
+  [aws-creds & args]
+  (apply sqs/send-fifo-message
+         (sqs/sqs-ext-client aws-creds)
+         args))
+
+(defn receive-loop
+  [aws-creds & args]
+  (apply receive/receive-loop
+         (sqs/sqs-ext-client aws-creds)
+         args))
 
 (defn- launch-handler-threads
   [number-of-handler-threads receive-chan auto-delete handler-fn]
