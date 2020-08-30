@@ -6,7 +6,6 @@
 
 
 ;; Conveniance declarations
-(def sqs-ext-client sqs/sqs-ext-client)
 (def create-standard-queue sqs/create-standard-queue)
 (def create-fifo-queue sqs/create-fifo-queue)
 (def send-message sqs/send-message)
