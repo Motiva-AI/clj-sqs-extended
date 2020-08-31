@@ -18,11 +18,12 @@
   (dotimes [_ number-of-handler-threads]
     (thread
       (loop []
-        (when-let [message (<!! receive-chan)]
+        (when-let [{message-body :body
+                    done-fn      :done-fn} (<!! receive-chan)]
           (try
             (if auto-delete
-              (handler-fn message)
-              (handler-fn message (:done-fn message)))
+              (handler-fn message-body)
+              (handler-fn message-body done-fn))
             (catch Throwable error
               (log/error error "Handler function threw an error!")))
           (recur))))))
