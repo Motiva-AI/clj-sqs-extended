@@ -56,7 +56,7 @@
   (testing "Sending a message with more than 256kb of data (via S3 bucket) in raw format"
     (fixtures/with-test-standard-queue
       (sqs/send-message @fixtures/test-sqs-ext-client
-                        fixtures/test-queue-url
+                        @fixtures/test-queue-url
                         test-message-larger-than-256kb
                         {:format :raw})
       (let [response (sqs/receive-message @fixtures/test-sqs-ext-client

@@ -45,13 +45,13 @@
     (fixtures/with-test-standard-queue
       (is (thrown? QueueDoesNotExistException
                    (sqs-ext/send-message @fixtures/test-sqs-ext-client
-                                         "https://non-existing-queue"
+                                         @fixtures/test-queue-url
                                          (first test-messages-basic))))))
   (testing "Sending a FIFO message to a non-existing queue yields proper exception"
     (fixtures/with-test-fifo-queue
       (is (thrown? QueueDoesNotExistException
                    (sqs-ext/send-fifo-message @fixtures/test-sqs-ext-client
-                                              "https://non-existing-queue"
+                                              @fixtures/test-queue-url
                                               (first test-messages-basic)
                                               (helpers/random-group-id)))))))
 
