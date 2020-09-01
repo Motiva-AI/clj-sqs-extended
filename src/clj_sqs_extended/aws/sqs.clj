@@ -48,7 +48,9 @@
      (when kms-data-key-reuse-period
        (doto request (.addAttributesEntry
                        "KmsDataKeyReusePeriodSeconds" kms-data-key-reuse-period)))
-     (.createQueue sqs-client request))))
+     (->> (.createQueue sqs-client request)
+         (.getQueueUrl)))))
+
 
 (defn create-standard-queue
   ([sqs-client queue-name]
@@ -86,13 +88,13 @@
   "Send a message to a standard queue.
 
   Argments:
-    sqs-client       - The extended sqs-client via which the request shall be sent
-    queue-url        - the queue's URL
-    message          - The actual message/data to be sent
+    sqs-client - The extended sqs-client via which the request shall be sent
+    queue-url  - the queue's URL
+    message    - The actual message/data to be sent
 
   Options:
-    format           - The format (currently :json or :transit) to serialize outgoing
-                       messages with (optional, default: :transit)"
+    format     - The format (currently :json or :transit) to serialize outgoing
+                 messages with (optional, default: :transit)"
   ([sqs-client queue-url message]
    (send-message sqs-client queue-url message {}))
 
@@ -100,9 +102,9 @@
     {:keys [format]
      :or   {format :transit}}]
    (->> (serdes/serialize message format)
-          (SendMessageRequest. queue-url)
-          (.sendMessage sqs-client)
-          (.getMessageId))))
+        (SendMessageRequest. queue-url)
+        (.sendMessage sqs-client)
+        (.getMessageId))))
 
 (defn send-fifo-message
   "Send a message to a FIFO queue.
