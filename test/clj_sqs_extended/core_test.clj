@@ -7,9 +7,8 @@
             [clj-sqs-extended.internal.receive :as receive]
             [clj-sqs-extended.test-fixtures :as fixtures]
             [clj-sqs-extended.test-helpers :as helpers])
-  (:import [com.amazonaws.services.sqs.model
-            AmazonSQSException
-            QueueDoesNotExistException]
+  (:import [com.amazonaws.services.sqs.model AmazonSQSException]
+           [com.amazonaws SdkClientException]
            [java.net.http HttpTimeoutException]
            [java.net
             SocketException
@@ -43,17 +42,19 @@
 (deftest send-message-to-non-existing-queue-fails
   (testing "Sending a standard message to a non-existing queue yields proper exception"
     (fixtures/with-test-standard-queue
-      (is (thrown? QueueDoesNotExistException
-                   (sqs-ext/send-message @fixtures/test-sqs-ext-client
-                                         @fixtures/test-queue-url
-                                         (first test-messages-basic))))))
+      (is (thrown-with-msg? SdkClientException 
+                            #"^.*Unable to execute HTTP request: non-existing-queue.*$"
+                            (sqs-ext/send-message @fixtures/test-sqs-ext-client
+                                                  "https://non-existing-queue"
+                                                  (first test-messages-basic))))))
   (testing "Sending a FIFO message to a non-existing queue yields proper exception"
     (fixtures/with-test-fifo-queue
-      (is (thrown? QueueDoesNotExistException
-                   (sqs-ext/send-fifo-message @fixtures/test-sqs-ext-client
-                                              @fixtures/test-queue-url
-                                              (first test-messages-basic)
-                                              (helpers/random-group-id)))))))
+      (is (thrown-with-msg? SdkClientException
+                            #"^.*Unable to execute HTTP request: non-existing-queue.*$"
+                            (sqs-ext/send-fifo-message @fixtures/test-sqs-ext-client
+                                                       "https://non-existing-queue"
+                                                       (first test-messages-basic)
+                                                       (helpers/random-group-id)))))))
 
 (deftest handle-queue-sends-and-receives-basic-messages
   (doseq [format [:transit :json]]
