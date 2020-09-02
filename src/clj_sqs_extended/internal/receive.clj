@@ -20,15 +20,15 @@
   (t/seconds (t/between t1 t2)))
 
 (defn- init-receive-loop-state
-  [sqs-ext-client queue-name receive-opts out-chan]
-  (log/infof "Initializing new receive-loop state for queue '%s' ..." queue-name)
+  [sqs-ext-client queue-url receive-opts out-chan]
+  (log/infof "Initializing new receive-loop state for queue '%s' ..." queue-url)
   (atom {:running    true
          :stats      {:iteration     0
                       :restart-count 0
                       :started-at    (t/now)}
-         :queue-name queue-name
+         :queue-url  queue-url
          :in-chan    (sqs/receive-message-channeled sqs-ext-client
-                                                    queue-name
+                                                    queue-url
                                                     receive-opts)
          :out-chan   out-chan}))
 
@@ -46,7 +46,7 @@
   [loop-state]
   (when (:running @loop-state)
     (log/warnf "Terminating receive-loop for queue '%s' ..."
-               (:queue-name @loop-state))
+               (:queue-url @loop-state))
     (swap! loop-state assoc :running false)
     (swap! loop-state assoc-in [:stats :stopped-at] (t/now))
     (close! (:in-chan @loop-state))
@@ -56,14 +56,14 @@
 (defn- restart-receive-loop
   [sqs-ext-client loop-state receive-opts]
   (log/infof "Restarting receive-loop for queue '%s' ..."
-             (:queue-name @loop-state))
+             (:queue-url @loop-state))
   (let [old-in-chan (:in-chan @loop-state)]
     (swap! loop-state
            (fn [state]
              (-> state
                  (assoc :in-chan
                         (sqs/receive-message-channeled sqs-ext-client
-                                                       (:queue-name @loop-state)
+                                                       (:queue-url @loop-state)
                                                        receive-opts))
                  (update-in [:stats :restart-count] inc)
                  (assoc-in [:stats :restarted-at] (t/now)))))
@@ -83,7 +83,7 @@
     (letfn [(raise-error []
               (throw (ex-info
                        (format "receive-loop for queue '%s' failed."
-                               (:queue-name @loop-state))
+                               (:queue-url @loop-state))
                        {:reason (.getMessage error)})))]
       (cond
         (and (error-might-be-recovered-by-restarting? error)
@@ -106,28 +106,28 @@
 (defn- process-message
   [sqs-ext-client loop-state message auto-delete]
   (let [done-fn #(sqs/delete-message sqs-ext-client
-                                     (:queue-name @loop-state)
+                                     (:queue-url @loop-state)
                                      message)
         msg (cond-> message
                     (not auto-delete) (assoc :done-fn done-fn))]
     (if (:body message)
       (go (>! (:out-chan @loop-state) msg))
       (log/warnf "Queue '%s' received a nil body message: %s"
-                 (:queue-name @loop-state)
+                 (:queue-url @loop-state)
                  message))
     (when auto-delete
       (done-fn))))
 
 (defn receive-loop
-  ([sqs-ext-client queue-name out-chan]
-   (receive-loop sqs-ext-client queue-name out-chan {}))
+  ([sqs-ext-client queue-url out-chan]
+   (receive-loop sqs-ext-client queue-url out-chan {}))
 
-  ([sqs-ext-client queue-name out-chan
+  ([sqs-ext-client queue-url out-chan
     {:keys [auto-delete
             restart-delay-seconds]
      :as   receive-opts}]
    (let [loop-state (init-receive-loop-state sqs-ext-client
-                                             queue-name
+                                             queue-url
                                              receive-opts
                                              out-chan)]
      (go-loop []

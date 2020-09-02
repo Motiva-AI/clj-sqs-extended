@@ -39,7 +39,7 @@
       region       - AWS region
 
     queue-opts - A map for the configuration settings of the queue to handle:
-      queue-name                - A string containing the name of the queue to handle (required)
+      queue-url                 - A string containing the unique URL of the queue to handle (required)
       s3-bucket-name            - A string containing the name of an existing S3 bucket to use to store
                                   large messages (required)
       number-of-handler-threads - Number of how many threads to run for handling message receival
@@ -78,7 +78,7 @@
            sqs-endpoint "http://localhost:4566"
            region       "us-east-2"}
     :as   aws-creds}
-   {:keys [queue-name
+   {:keys [queue-url
            s3-bucket-name
            number-of-handler-threads
            restart-limit
@@ -94,20 +94,20 @@
   (let [sqs-ext-client (sqs/sqs-ext-client aws-creds s3-bucket-name)
         receive-chan (chan)
         stop-fn (receive/receive-loop sqs-ext-client
-                                      queue-name
+                                      queue-url
                                       receive-chan
                                       {:auto-delete           auto-delete
                                        :restart-limit         restart-limit
                                        :restart-delay-seconds restart-delay-seconds
                                        :format                format})]
-    (log/infof (str "Now handling queue '%s' with:\n"
+    (log/infof (str "Handling queue '%s' with:\n"
                     "  bucket: %s\n"
                     "  number-of-handler-threads: %d\n"
                     "  restart-limit: %d\n"
                     "  restart-delay-seconds: %d\n"
                     "  auto-delete: %s\n"
                     "  format: %s")
-               queue-name
+               queue-url
                s3-bucket-name
                number-of-handler-threads
                restart-limit
