@@ -3,7 +3,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: circleci/clojure:lein-2.9.3
+      - image: circleci/clojure:openjdk-11-lein
         environment:
           JVM_OPTS: -Xmx3200m
           AWS_DEFAULT_REGION: us-east-2
