@@ -2,6 +2,7 @@
   (:require [clojure.test :refer [use-fixtures deftest testing is are]]
             [clojure.core.async :refer [chan close! <!!]]
             [clojure.core.async.impl.protocols :refer [closed?]]
+            [bond.james :as bond :refer [with-spy]]
             [clj-sqs-extended.aws.sqs :as sqs]
             [clj-sqs-extended.core :as sqs-ext]
             [clj-sqs-extended.internal.receive :as receive]
@@ -10,8 +11,6 @@
   (:import [com.amazonaws
             AmazonServiceException
             SdkClientException]
-           [com.amazonaws.services.sqs.model
-            AmazonSQSException]
            [java.net.http HttpTimeoutException]
            [java.net
             SocketException
@@ -73,14 +72,14 @@
                                                @fixtures/test-queue-url
                                                (first test-messages-basic)
                                                {:format format})))
-            (is (= (first test-messages-basic) (:body (<!! handler-chan)))))
+            (is (= (first test-messages-basic) (<!! handler-chan))))
 
           (testing "handle-queue can send/receive large message to standard queue"
             (is (string? (sqs-ext/send-message fixtures/aws-config
                                                @fixtures/test-queue-url
                                                test-message-large
                                                {:format format})))
-            (is (= test-message-large (:body (<!! handler-chan))))))))))
+            (is (= test-message-large (<!! handler-chan)))))))))
 
 (deftest handle-queue-sends-and-receives-timestamped-message
   (testing "handle-queue can send/receive message including timestamp to standard queue"
@@ -92,7 +91,7 @@
           (is (string? (sqs-ext/send-message fixtures/aws-config
                                              @fixtures/test-queue-url
                                              test-message-with-time)))
-          (is (= test-message-with-time (:body (<!! handler-chan)))))))))
+          (is (= test-message-with-time (<!! handler-chan))))))))
 
 (deftest handle-queue-sends-and-receives-fifo-messages
   (testing "handle-queue can send/receive basic messages to FIFO queue"
@@ -111,7 +110,7 @@
                                                       {:format format}))))
             (doseq [message test-messages-basic]
               (let [received-message (<!! handler-chan)]
-                (is (= message (:body received-message)))))))))))
+                (is (= message received-message))))))))))
 
 (deftest handle-queue-terminates-with-non-existing-queue
   (testing "handle-queue terminates when non-existing queue is used"
@@ -120,7 +119,7 @@
         (let [stats
               (fixtures/with-handle-queue-queue-opts-standard
                 handler-chan
-                {:queue-name "non-existing-queue"})]
+                {:queue-url "https://non-existing-queue"})]
 
           (is (contains? stats :stopped-at))))
       (close! handler-chan))))
@@ -171,11 +170,13 @@
         ;;           an error once and afterwards do what the original function did,
         ;;           which we saved previously:
         (with-redefs-fn {#'sqs/receive-message
-                         (fn [sqs-client queue-name opts]
+                         (fn [sqs-client queue-url opts]
                            (swap! called-counter inc)
                            (if (= @called-counter 1)
                              (HttpTimeoutException. "Testing temporary network failure")
-                             (receive-message sqs-client queue-name opts)))}
+                             (receive-message @fixtures/test-sqs-ext-client
+                                              @fixtures/test-queue-url
+                                              {})))}
           #(let [restart-delay-seconds 1
                  stop-fn (fixtures/with-handle-queue-queue-opts-standard-no-autostop
                            handler-chan
@@ -187,7 +188,7 @@
              (is (string? (sqs-ext/send-message fixtures/aws-config
                                                 @fixtures/test-queue-url
                                                 test-message-with-time)))
-             (is (= test-message-with-time (:body (<!! handler-chan))))
+             (is (= test-message-with-time (<!! handler-chan)))
              (let [stats (stop-fn)]
                ;; ... and that the loop was actually restarted ...
                (is (= (:restart-count stats) 1))
@@ -237,56 +238,51 @@
 
 (deftest done-fn-handle-present-when-auto-delete-false
   (testing "done-fn handle is present in response when auto-delete is false"
-    (let [handler-chan (chan)]
-      (fixtures/with-test-standard-queue
-        (fixtures/with-handle-queue-queue-opts-standard
-          handler-chan
-          {:auto-delete false}
+    (bond/with-spy [fixtures/test-handler-fn]
+      (let [handler-chan (chan)]
+        (fixtures/with-test-standard-queue
+          (fixtures/with-handle-queue-queue-opts-standard
+            handler-chan
+            {:auto-delete false}
 
-          (is (string? (sqs-ext/send-message fixtures/aws-config
-                                             @fixtures/test-queue-url
-                                             (last test-messages-basic))))
-          (let [received-message (<!! handler-chan)]
-            (is (= (last test-messages-basic) (:body received-message)))
+            (is (string? (sqs-ext/send-message fixtures/aws-config
+                                               @fixtures/test-queue-url
+                                               (last test-messages-basic))))
+            (let [received-message (<!! handler-chan)]
+              (is (= (last test-messages-basic) received-message))
 
-            ;; function handle is properly returned ...
-            (is (contains? received-message :done-fn))
-            (is (fn? (:done-fn received-message)))
+              (let [received-message (<!! handler-chan)]
+                (is (= (last test-messages-basic) received-message))
 
-            ;; ... and can be used to delete the message now
-            (is ((:done-fn received-message))))))
+                ;; delete function handle is returned as last argument ...
+                (let [test-handler-fn-args
+                      (-> fixtures/test-handler-fn bond/calls first :args)]
+                  (is (fn? (last test-handler-fn-args))))))))
+        (close! handler-chan)))))
 
-      (close! handler-chan))))
 
 (deftest done-fn-handle-absent-when-auto-delete-true
   (testing "done-fn handle is not present in response when auto-delete is true"
-    (let [handler-chan (chan)]
-      (fixtures/with-test-standard-queue
-        (fixtures/with-handle-queue-queue-opts-standard
-          handler-chan
-          {:auto-delete true}
+    (bond/with-spy [fixtures/test-handler-fn]
+      (let [handler-chan (chan)]
+        (fixtures/with-test-standard-queue
+          (fixtures/with-handle-queue-queue-opts-standard
+            handler-chan
+            {:auto-delete true}
 
-          (is (string? (sqs-ext/send-message fixtures/aws-config
-                                             @fixtures/test-queue-url
-                                             (first test-messages-basic))))
-          (let [received-message (<!! handler-chan)]
-            (is (= (first test-messages-basic) (:body received-message)))
+            (is (string? (sqs-ext/send-message fixtures/aws-config
+                                               @fixtures/test-queue-url
+                                               (first test-messages-basic))))
 
-            ;; no handle present because the message was already auto-deleted
-            (is (not (contains? received-message :done-fn)))
+            (let [received-message (<!! handler-chan)]
+              (is (= (first test-messages-basic) received-message))
 
-            ;; make sure we don't try to delete it before the library got its
-            ;; chance to do so
-            (Thread/sleep 500)
+              ;; no delete function handle has been passed as last argument ...
+              (let [test-handler-fn-args
+                    (-> fixtures/test-handler-fn bond/calls first :args)]
+                (is (not (fn? (last test-handler-fn-args))))))))
 
-            ;; attempting to delete it now should yield an exception because its
-            ;; already not there anymore
-            (is (thrown-with-msg? AmazonSQSException
-                                  #"^.*Status Code: 400; Error Code: 400.*$"
-                                  (sqs-ext/delete-message! fixtures/aws-config
-                                                           @fixtures/test-queue-url
-                                                           received-message))))))
-      (close! handler-chan))))
+        (close! handler-chan)))))
 
 (deftest recoverable-errors-get-judged-properly
   (testing "error-might-be-recovered-by-restarting? judges errors correctly"

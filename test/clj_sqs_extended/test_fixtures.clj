@@ -69,19 +69,21 @@
   [& body]
   `(wrap-fifo-queue (fn [] ~@body)))
 
+(defn test-handler-fn
+  ([chan message]
+   (>!! chan message))
+  ([chan message _]
+   ;; WATCHOUT: Second parameter (done-fn) is not used here.
+   (>!! chan message)))
+
 (defn wrap-handle-queue
   [handler-chan auto-stop aws-opts queue-opts f]
   (let [queue-config (merge {:queue-url      @test-queue-url
                              :s3-bucket-name (:s3-bucket-name aws-config)}
                             queue-opts)
-        handler-fn (fn ([message]
-                        (>!! handler-chan message))
-                     ([message _]
-                      ;; WATCHOUT: Second parameter (done-fn) is not used here.
-                      (>!! handler-chan message)))
         stop-fn (sqs-ext/handle-queue (merge aws-config aws-opts)
                                       queue-config
-                                      handler-fn)]
+                                      (partial test-handler-fn handler-chan))]
     (f)
     (if auto-stop
       (stop-fn)

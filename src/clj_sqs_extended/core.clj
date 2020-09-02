@@ -53,11 +53,12 @@
   (dotimes [_ number-of-handler-threads]
     (thread
       (loop []
-        (when-let [message (<!! receive-chan)]
+        (when-let [{message-body :body
+                    done-fn      :done-fn} (<!! receive-chan)]
           (try
             (if auto-delete
-              (handler-fn message)
-              (handler-fn message (:done-fn message)))
+              (handler-fn message-body)
+              (handler-fn message-body done-fn))
             (catch Throwable error
               (log/error error "Handler function threw an error!")))
           (recur))))))
@@ -74,7 +75,7 @@
       region       - AWS region
 
     queue-opts - A map for the configuration settings of the queue to handle:
-      queue-name                - A string containing the name of the queue to handle (required)
+      queue-url                 - A string containing the unique URL of the queue to handle (required)
       s3-bucket-name            - A string containing the name of an existing S3 bucket to use to store
                                   large messages (required)
       number-of-handler-threads - Number of how many threads to run for handling message receival

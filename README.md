@@ -6,7 +6,7 @@ This library is a clojure wrapper for the [Amazon SQS Extended Client Library fo
 
 ## Example
 
-Spin up some services via Docker on your localhost,
+Spin up some services via Docker on your localhost to try the following:
 
 ```
 $ make devel
@@ -22,16 +22,26 @@ $ make devel
 
 
 (def aws-config
- {:access-key   "your-access-key"
-  :secret-key   "your-secret-key"
-  :s3-endpoint  "https://localhost:4566"
-  :sqs-endpoint "https://localhost:4566"
+ {:access-key   "default"
+  :secret-key   "default"
+  :s3-endpoint  "http://localhost:4566"
+  :sqs-endpoint "http://localhost:4566"
   :region       "us-east-2"})
 
-(def queue-config
- {:queue-name                "name-of-existing-queue-to-use"
-  :s3-bucket-name            "name-of-existing-bucket-to-use"
-  :number-of-handler-threads 1})
+(defonce queue-config (atom
+                       {:s3-bucket-name            "example-bucket"
+                        :number-of-handler-threads 1}))
+
+(def s3-client (s3/s3-client aws-config))
+
+(s3/create-bucket s3-client (:s3-bucket-name @queue-config))
+
+(def sqs-ext-client (sqs-ext/sqs-ext-client aws-config
+                                            (:s3-bucket-name @queue-config)))
+
+(swap! queue-config
+       assoc :queue-url
+       (sqs-ext/create-standard-queue sqs-ext-client "example-queue"))
 
 (defn random-string-with-length
   [length]
@@ -47,16 +57,20 @@ $ make devel
 (defn dispatch-action-service
   ([message]
    (log/infof "I got '%s'..."
-              (subs (get-in message [:body :payload]) 0 32)))
+              (subs (get-in message [:body :payload])
+                    0
+                    32)))
   ([message done-fn]
    (log/infof "I got '%s'..."
-              (subs (get-in message [:body :payload]) 0 32))
+              (subs (get-in message [:body :payload])
+                    0
+                    32))
    (done-fn)))
 
 (defn start-action-service-queue-listener
   []
   (sqs-ext/handle-queue aws-config
-                        queue-config
+                        @queue-config
                         dispatch-action-service))
 
 (defn start-queue-listeners
@@ -76,23 +90,14 @@ $ make devel
 
 (defn run-example
   []
-  (let [s3-client (s3/s3-client aws-config)]
-    (s3/create-bucket s3-client (:s3-bucket-name
-                                 queue-config))
-    (let [sqs-ext-client (sqs-ext/sqs-ext-client aws-config
-                                                 (:s3-bucket-name queue-config))]
-      (sqs-ext/create-standard-queue sqs-ext-client
-                                     (:queue-name queue-config))
+  ;; Start processing all received messages ...
+  (future (start-worker))
 
-      ;; Start processing all received messages ...
-      (future (start-worker))
-
-      ;; Send a large test message that requires S3 usage to store ...
-      (let [message (random-message-larger-than-256kb)]
-        (log/infof "Sent message with ID '%s'."
-                   (sqs-ext/send-message sqs-ext-client
-                                         (:queue-name queue-config)
-                                         message))))))
+  ;; Send a large test message that requires S3 usage to store its payload ...
+  (log/infof "Sent message with ID '%s'."
+             (sqs-ext/send-message sqs-ext-client
+                                   (:queue-url @queue-config)
+                                   (random-message-larger-than-256kb))))
 ```
 
 ## Development
