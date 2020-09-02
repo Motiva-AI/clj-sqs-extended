@@ -113,8 +113,9 @@
     sqs-client       - The extended sqs-client via which the request shall be sent
     queue-url        - the queue's URL
     message          - The actual message/data to be sent
-    message-group-id - A string that specifies the group that this message belongs to.
-                       Messages belonging to the same group are guaranteed FIFO
+    message-group-id - A value that will be parsed as string to specify the
+                       group that this message belongs to. Messages belonging
+                       to the same group are guaranteed FIFO
 
   Options:
     format           - The format (currently :json or :transit) to serialize outgoing
@@ -129,10 +130,10 @@
      :or   {format :transit}}]
    (let [request (->> (serdes/serialize message format)
                       (SendMessageRequest. queue-url))]
-     ;; WATCHOUT: The group ID is mandatory when sending fifo messages.
-     (doto request (.setMessageGroupId group-id))
+     ;; group ID is mandatory when sending fifo messages
+     (doto request (.setMessageGroupId (str group-id)))
      (when deduplication-id
-       ;; WATCHOUT: Refer to https://docs.aws.amazon.com/AWSJavaSDK/latest/javadoc/com/amazonaws/services/sqs/model/SendMessageRequest.html#setMessageDeduplicationId-java.lang.String-
+       ;; Refer to https://docs.aws.amazon.com/AWSJavaSDK/latest/javadoc/com/amazonaws/services/sqs/model/SendMessageRequest.html#setMessageDeduplicationId-java.lang.String-
        (doto request (.setMessageDeduplicationId deduplication-id)))
      (->> request
           (.sendMessage sqs-client)
