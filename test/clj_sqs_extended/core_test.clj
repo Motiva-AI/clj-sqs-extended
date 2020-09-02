@@ -8,8 +8,8 @@
             [clj-sqs-extended.internal.receive :as receive]
             [clj-sqs-extended.test-fixtures :as fixtures]
             [clj-sqs-extended.test-helpers :as helpers])
-  (:import [com.amazonaws.services.sqs.model
-            QueueDoesNotExistException]
+  (:import [com.amazonaws.services.sqs.model AmazonSQSException]
+           [com.amazonaws SdkClientException]
            [java.net.http HttpTimeoutException]
            [java.net
             SocketException
@@ -29,31 +29,33 @@
     (fixtures/with-test-standard-queue
       (is (thrown? Exception
                    (sqs-ext/send-message @fixtures/test-sqs-ext-client
-                                         fixtures/test-standard-queue-name
+                                         @fixtures/test-queue-url
                                          nil)))))
 
   (testing "Sending a FIFO message with a nil body yields exception"
     (fixtures/with-test-fifo-queue
       (is (thrown? Exception
                    (sqs-ext/send-fifo-message @fixtures/test-sqs-ext-client
-                                              fixtures/test-fifo-queue-name
+                                              @fixtures/test-queue-url
                                               nil
                                               (helpers/random-group-id)))))))
 
 (deftest send-message-to-non-existing-queue-fails
   (testing "Sending a standard message to a non-existing queue yields proper exception"
     (fixtures/with-test-standard-queue
-      (is (thrown? QueueDoesNotExistException
-                   (sqs-ext/send-message @fixtures/test-sqs-ext-client
-                                         "non-existing-queue"
-                                         (first test-messages-basic))))))
+      (is (thrown-with-msg? SdkClientException
+                            #"^.*Unable to execute HTTP request: non-existing-queue.*$"
+                            (sqs-ext/send-message @fixtures/test-sqs-ext-client
+                                                  "https://non-existing-queue"
+                                                  (first test-messages-basic))))))
   (testing "Sending a FIFO message to a non-existing queue yields proper exception"
     (fixtures/with-test-fifo-queue
-      (is (thrown? QueueDoesNotExistException
-                   (sqs-ext/send-fifo-message @fixtures/test-sqs-ext-client
-                                              "non-existing-queue"
-                                              (first test-messages-basic)
-                                              (helpers/random-group-id)))))))
+      (is (thrown-with-msg? SdkClientException
+                            #"^.*Unable to execute HTTP request: non-existing-queue.*$"
+                            (sqs-ext/send-fifo-message @fixtures/test-sqs-ext-client
+                                                       "https://non-existing-queue"
+                                                       (first test-messages-basic)
+                                                       (helpers/random-group-id)))))))
 
 (deftest handle-queue-sends-and-receives-basic-messages
   (doseq [format [:transit :json]]
@@ -65,14 +67,14 @@
 
           (testing "handle-queue can send/receive basic message to standard queue"
             (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
-                                               fixtures/test-standard-queue-name
+                                               @fixtures/test-queue-url
                                                (first test-messages-basic)
                                                {:format format})))
             (is (= (first test-messages-basic) (<!! handler-chan))))
 
           (testing "handle-queue can send/receive large message to standard queue"
             (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
-                                               fixtures/test-standard-queue-name
+                                               @fixtures/test-queue-url
                                                test-message-large
                                                {:format format})))
             (is (= test-message-large (<!! handler-chan)))))))))
@@ -85,7 +87,7 @@
           handler-chan
 
           (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
-                                             fixtures/test-standard-queue-name
+                                             @fixtures/test-queue-url
                                              test-message-with-time)))
           (is (= test-message-with-time (<!! handler-chan))))))))
 
@@ -100,7 +102,7 @@
 
             (doseq [message test-messages-basic]
               (is (string? (sqs-ext/send-fifo-message @fixtures/test-sqs-ext-client
-                                                      fixtures/test-fifo-queue-name
+                                                      @fixtures/test-queue-url
                                                       message
                                                       (helpers/random-group-id)
                                                       {:format format}))))
@@ -115,7 +117,7 @@
         (let [stats
               (fixtures/with-handle-queue-queue-opts-standard
                 handler-chan
-                {:queue-name "non-existing-queue"})]
+                {:queue-url "https://non-existing-queue"})]
 
           (is (contains? stats :stopped-at))))
       (close! handler-chan))))
@@ -151,11 +153,13 @@
         ;;           an error once and afterwards do what the original function did,
         ;;           which we saved previously:
         (with-redefs-fn {#'sqs/receive-message
-                         (fn [sqs-client queue-name opts]
+                         (fn [sqs-client queue-url opts]
                            (swap! called-counter inc)
                            (if (= @called-counter 1)
                              (HttpTimeoutException. "Testing temporary network failure")
-                             (receive-message sqs-client queue-name opts)))}
+                             (receive-message @fixtures/test-sqs-ext-client
+                                              @fixtures/test-queue-url
+                                              {})))}
           #(let [restart-delay-seconds 1
                  stop-fn (fixtures/with-handle-queue-queue-opts-standard-no-autostop
                            handler-chan
@@ -165,7 +169,7 @@
 
              ;; verify that sending/receiving still works ...
              (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
-                                                fixtures/test-standard-queue-name
+                                                @fixtures/test-queue-url
                                                 test-message-with-time)))
              (is (= test-message-with-time (<!! handler-chan)))
              (let [stats (stop-fn)]
@@ -201,7 +205,7 @@
                 {:s3-bucket-name "non-existing-bucket"})]
 
           (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
-                                             fixtures/test-standard-queue-name
+                                             @fixtures/test-queue-url
                                              test-message-large)))
           (is (contains? stats :stopped-at))))
       (close! handler-chan))))
@@ -212,19 +216,19 @@
       (fixtures/with-test-standard-queue
         (let [out-chan (chan)
               stop-fn (receive/receive-loop @fixtures/test-sqs-ext-client
-                                            fixtures/test-standard-queue-name
+                                            @fixtures/test-queue-url
                                             out-chan
                                             {:format format})]
           (is (fn? stop-fn))
           (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
-                                             fixtures/test-standard-queue-name
+                                             @fixtures/test-queue-url
                                              (first test-messages-basic)
                                              {:format format})))
           (is (= (first test-messages-basic) (:body (<!! out-chan))))
           ;; terminate receive loop and thereby close the out-channel
           (stop-fn)
           (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
-                                             fixtures/test-standard-queue-name
+                                             @fixtures/test-queue-url
                                              (last test-messages-basic)
                                              {:format format})))
           (is (clojure.core.async.impl.protocols/closed? out-chan))
@@ -240,7 +244,7 @@
             {:auto-delete false}
 
             (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
-                                               fixtures/test-standard-queue-name
+                                               @fixtures/test-queue-url
                                                (last test-messages-basic))))
 
             (let [received-message (<!! handler-chan)]
@@ -265,6 +269,7 @@
             (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
                                                fixtures/test-standard-queue-name
                                                (first test-messages-basic))))
+
             (let [received-message (<!! handler-chan)]
               (is (= (first test-messages-basic) received-message))
 

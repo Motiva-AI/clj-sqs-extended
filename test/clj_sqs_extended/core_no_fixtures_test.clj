@@ -29,21 +29,22 @@
       ;;           is instantiated so we need to fire off a message:
       (is (thrown? SdkClientException
                    (sqs-ext/send-message unreachable-client
-                                         "test-queue"
+                                         "https://non-existing-queue"
                                          {:data "here-be-dragons"}))))))
 
 (deftest cannot-send-to-non-existing-bucket
   (testing "Sending a large message using a non-existing S3 bucket yields proper exception"
     (let [sqs-ext-client (sqs/sqs-ext-client aws-up-config
-                                             "non-existing-bucket")]
+                                             "non-existing-bucket")
+          test-queue-url (sqs/create-standard-queue sqs-ext-client
+                                                    "test-queue")]
       ;; WATCHOUT: Apparently the SDK does not verify the existance of the used S3
       ;;           bucket when the client is in instantiated so we need to send a
       ;;           large message that would require the bucket to be used:
-      (sqs/create-standard-queue sqs-ext-client
-                                 "test-queue")
+
       (is (thrown? AmazonServiceException
                    (sqs-ext/send-message sqs-ext-client
-                                         "test-queue"
+                                         test-queue-url
                                          (helpers/random-message-larger-than-256kb))))
       (sqs/delete-queue! sqs-ext-client
-                        "test-queue"))))
+                         test-queue-url))))

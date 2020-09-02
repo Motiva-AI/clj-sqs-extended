@@ -1,6 +1,5 @@
 (ns clj-sqs-extended.test-helpers
-  (:require [tick.alpha.api :as t]
-            [clj-sqs-extended.aws.sqs :as sqs])
+  (:require [tick.alpha.api :as t])
   (:import [java.util UUID]))
 
 (defn random-bucket-name
@@ -45,13 +44,12 @@
    :payload (random-string-with-length 300000)})
 
 (defn get-total-message-amount-in-queue
-  [sqs-client name]
-  (let [url (sqs/queue-name-to-url sqs-client name)]
-    (->> ["ApproximateNumberOfMessages"
-          "ApproximateNumberOfMessagesNotVisible"
-          "ApproximateNumberOfMessagesDelayed"]
-         (.getQueueAttributes sqs-client url)
-         (.getAttributes)
-         (vals)
-         (map read-string)
-         (reduce +))))
+  [sqs-client queue-url]
+  (->> ["ApproximateNumberOfMessages"
+        "ApproximateNumberOfMessagesNotVisible"
+        "ApproximateNumberOfMessagesDelayed"]
+       (.getQueueAttributes sqs-client queue-url)
+       (.getAttributes)
+       (vals)
+       (map read-string)
+       (reduce +)))
