@@ -8,8 +8,7 @@
             [clj-sqs-extended.internal.receive :as receive]
             [clj-sqs-extended.test-fixtures :as fixtures]
             [clj-sqs-extended.test-helpers :as helpers])
-  (:import [com.amazonaws.services.sqs.model AmazonSQSException]
-           [com.amazonaws SdkClientException]
+  (:import [com.amazonaws SdkClientException]
            [java.net.http HttpTimeoutException]
            [java.net
             SocketException
@@ -48,6 +47,7 @@
                             (sqs-ext/send-message @fixtures/test-sqs-ext-client
                                                   "https://non-existing-queue"
                                                   (first test-messages-basic))))))
+
   (testing "Sending a FIFO message to a non-existing queue yields proper exception"
     (fixtures/with-test-fifo-queue
       (is (thrown-with-msg? SdkClientException
@@ -267,7 +267,7 @@
             {:auto-delete true}
 
             (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
-                                               fixtures/test-standard-queue-name
+                                               @fixtures/test-queue-url
                                                (first test-messages-basic))))
 
             (let [received-message (<!! handler-chan)]
