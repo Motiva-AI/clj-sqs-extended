@@ -127,7 +127,8 @@
            auto-delete               true
            format                    :transit}}
    handler-fn]
-  (let [sqs-ext-client (sqs/sqs-ext-client aws-creds)
+  (let [sqs-ext-client (sqs/sqs-ext-client (merge aws-creds
+                                                  {:s3-bucket-name s3-bucket-name}))
         receive-chan (chan)
         stop-fn (receive/receive-loop sqs-ext-client
                                       queue-url
