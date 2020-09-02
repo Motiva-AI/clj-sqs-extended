@@ -2,13 +2,13 @@
   (:require [clojure.test :refer [use-fixtures deftest testing is are]]
             [clojure.core.async :refer [chan close! <!!]]
             [clojure.core.async.impl.protocols :refer [closed?]]
+            [bond.james :as bond :refer [with-spy]]
             [clj-sqs-extended.aws.sqs :as sqs]
             [clj-sqs-extended.core :as sqs-ext]
             [clj-sqs-extended.internal.receive :as receive]
             [clj-sqs-extended.test-fixtures :as fixtures]
             [clj-sqs-extended.test-helpers :as helpers])
   (:import [com.amazonaws.services.sqs.model
-            AmazonSQSException
             QueueDoesNotExistException]
            [java.net.http HttpTimeoutException]
            [java.net
@@ -232,62 +232,48 @@
 
 (deftest done-fn-handle-present-when-auto-delete-false
   (testing "done-fn handle is present in response when auto-delete is false"
-    (let [handler-chan (chan)]
-      (fixtures/with-test-standard-queue
-        (fixtures/with-handle-queue-queue-opts-standard
-          handler-chan
-          {:auto-delete false}
+    (bond/with-spy [fixtures/test-handler-fn]
+      (let [handler-chan (chan)]
+        (fixtures/with-test-standard-queue
+          (fixtures/with-handle-queue-queue-opts-standard
+            handler-chan
+            {:auto-delete false}
 
-          (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
-                                             fixtures/test-standard-queue-name
-                                             (last test-messages-basic))))
-          (let [received-message (<!! handler-chan)]
-            (is (= (last test-messages-basic) received-message))
+            (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
+                                               fixtures/test-standard-queue-name
+                                               (last test-messages-basic))))
 
-            ;; TODO this is broken by https://github.com/Motiva-AI/clj-sqs-extended/issues/62
-            ;; we should use an bond/with-spy on handler-fn to check the arguments passed in
-            (comment
-              ;; function handle is properly returned ...
-              (is (contains? received-message :done-fn))
-              (is (fn? (:done-fn received-message)))
+            (let [received-message (<!! handler-chan)]
+              (is (= (last test-messages-basic) received-message))
 
-              ;; ... and can be used to delete the message now
-              (is ((:done-fn received-message)))))))
+              ;; delete function handle is returned as last argument ...
+              (let [test-handler-fn-args
+                    (-> fixtures/test-handler-fn bond/calls first :args)]
+                (is (fn? (last test-handler-fn-args)))))))
 
-      (close! handler-chan))))
+        (close! handler-chan)))))
 
 (deftest done-fn-handle-absent-when-auto-delete-true
   (testing "done-fn handle is not present in response when auto-delete is true"
-    (let [handler-chan (chan)]
-      (fixtures/with-test-standard-queue
-        (fixtures/with-handle-queue-queue-opts-standard
-          handler-chan
-          {:auto-delete true}
+    (bond/with-spy [fixtures/test-handler-fn]
+      (let [handler-chan (chan)]
+        (fixtures/with-test-standard-queue
+          (fixtures/with-handle-queue-queue-opts-standard
+            handler-chan
+            {:auto-delete true}
 
-          (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
-                                             fixtures/test-standard-queue-name
-                                             (first test-messages-basic))))
-          (let [received-message (<!! handler-chan)]
-            (is (= (first test-messages-basic) received-message))
+            (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
+                                               fixtures/test-standard-queue-name
+                                               (first test-messages-basic))))
+            (let [received-message (<!! handler-chan)]
+              (is (= (first test-messages-basic) received-message))
 
-            ;; TODO this is broken by https://github.com/Motiva-AI/clj-sqs-extended/issues/62
-            ;; because received-message only contains the body
-            (comment
-              ;; no handle present because the message was already auto-deleted
-              (is (not (contains? received-message :done-fn)))
+              ;; no delete function handle has been passed as last argument ...
+              (let [test-handler-fn-args
+                    (-> fixtures/test-handler-fn bond/calls first :args)]
+                (is (not (fn? (last test-handler-fn-args))))))))
 
-              ;; make sure we don't try to delete it before the library got its
-              ;; chance to do so
-              (Thread/sleep 500)
-
-              ;; attempting to delete it now should yield an exception because its
-              ;; already not there anymore
-              (is (thrown-with-msg? AmazonSQSException
-                                    #"^.*Status Code: 400; Error Code: 400.*$"
-                                    (sqs/delete-message @fixtures/test-sqs-ext-client
-                                                        fixtures/test-standard-queue-name
-                                                        received-message)))))))
-      (close! handler-chan))))
+        (close! handler-chan)))))
 
 (deftest recoverable-errors-get-judged-properly
   (testing "error-might-be-recovered-by-restarting? judges errors correctly"
