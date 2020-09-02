@@ -18,7 +18,7 @@
            [java.lang ReflectiveOperationException]))
 
 
-(use-fixtures :once fixtures/with-test-bucket)
+(use-fixtures :once fixtures/with-test-sqs-ext-client)
 
 (defonce test-messages-basic
          (into [] (take 5 (repeatedly helpers/random-message-basic))))

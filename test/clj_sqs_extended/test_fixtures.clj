@@ -30,15 +30,6 @@
     (s3/purge-bucket s3-client
                      (:s3-bucket-name aws-config))))
 
-(defn with-test-bucket
-  [f]
-  (let [s3-client (s3/s3-client aws-config)]
-    (s3/create-bucket s3-client
-                      (:s3-bucket-name aws-config))
-    (f)
-    (s3/purge-bucket s3-client
-                     (:s3-bucket-name aws-config))))
-
 (defn wrap-standard-queue
   [f]
   (reset! test-queue-url
