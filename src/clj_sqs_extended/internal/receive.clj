@@ -105,9 +105,9 @@
 
 (defn- process-message
   [sqs-ext-client loop-state message auto-delete]
-  (let [done-fn #(sqs/delete-message sqs-ext-client
-                                     (:queue-url @loop-state)
-                                     message)
+  (let [done-fn #(sqs/delete-message! sqs-ext-client
+                                      (:queue-url @loop-state)
+                                      message)
         msg (cond-> message
                     (not auto-delete) (assoc :done-fn done-fn))]
     (if (:body message)

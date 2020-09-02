@@ -18,7 +18,7 @@
     (fixtures/with-test-standard-queue
       (doseq [format [:transit :json]]
         (let [response (sqs/receive-message @fixtures/test-sqs-ext-client
-                                            fixtures/test-standard-queue-name
+                                            @fixtures/test-queue-url
                                             {:format format})]
           (is (empty? response)))))))
 
@@ -29,10 +29,10 @@
         (doseq [format [:transit :json]]
           (log/infof "Message sent. ID: '%s'"
                      (sqs/send-message @fixtures/test-sqs-ext-client
-                                       fixtures/test-standard-queue-name
+                                       @fixtures/test-queue-url
                                        test-message {:format format}))
           (let [response (sqs/receive-message @fixtures/test-sqs-ext-client
-                                              fixtures/test-standard-queue-name
+                                              @fixtures/test-queue-url
                                               {:format format})]
             (is (= test-message (:body response)))))))))
 
@@ -42,13 +42,13 @@
       (doseq [format [:transit :json]]
         (doseq [test-message test-messages]
           (sqs/send-fifo-message @fixtures/test-sqs-ext-client
-                                 fixtures/test-fifo-queue-name
+                                 @fixtures/test-queue-url
                                  test-message
                                  (helpers/random-group-id)
                                  {:format format}))
         (doseq [test-message test-messages]
           (let [response (sqs/receive-message @fixtures/test-sqs-ext-client
-                                              fixtures/test-fifo-queue-name
+                                              @fixtures/test-queue-url
                                               {:format format})]
             (is (= test-message (:body response)))))))))
 
@@ -56,12 +56,8 @@
   (testing "Sending a message with more than 256kb of data (via S3 bucket) in raw format"
     (fixtures/with-test-standard-queue
       (sqs/send-message @fixtures/test-sqs-ext-client
-                        fixtures/test-standard-queue-name
-                        test-message-larger-than-256kb
-                        {:format :raw})
+                        @fixtures/test-queue-url
+                        test-message-larger-than-256kb)
       (let [response (sqs/receive-message @fixtures/test-sqs-ext-client
-                                          fixtures/test-standard-queue-name
-                                          {:format :raw})
-            desired-length (count test-message-larger-than-256kb)
-            response-length (->> (:body response) (count))]
-        (is (= desired-length response-length))))))
+                                          @fixtures/test-queue-url)]
+        (is (= test-message-larger-than-256kb (:body response)))))))

@@ -6,35 +6,46 @@
 
 
 ;; Conveniance declarations
-;; TODO DRY, use a macro for these redefs
-(defn create-standard-queue
-  [aws-creds & args]
-  (apply sqs/create-standard-queue
-         (sqs/sqs-ext-client aws-creds)
+(defn create-standard-queue!
+  [aws-config & args]
+  (apply sqs/create-standard-queue!
+         (sqs/sqs-ext-client aws-config)
          args))
 
-(defn create-fifo-queue
-  [aws-creds & args]
-  (apply sqs/create-fifo-queue
-         (sqs/sqs-ext-client aws-creds)
+(defn create-fifo-queue!
+  [aws-config & args]
+  (apply sqs/create-fifo-queue!
+         (sqs/sqs-ext-client aws-config)
+         args))
+
+(defn delete-queue!
+  [aws-config & args]
+  (apply sqs/delete-queue!
+         (sqs/sqs-ext-client aws-config)
          args))
 
 (defn send-message
-  [aws-creds & args]
+  [aws-config & args]
   (apply sqs/send-message
-         (sqs/sqs-ext-client aws-creds)
+         (sqs/sqs-ext-client aws-config)
          args))
 
 (defn send-fifo-message
-  [aws-creds & args]
+  [aws-config & args]
   (apply sqs/send-fifo-message
-         (sqs/sqs-ext-client aws-creds)
+         (sqs/sqs-ext-client aws-config)
+         args))
+
+(defn delete-message!
+  [aws-config & args]
+  (apply sqs/delete-message!
+         (sqs/sqs-ext-client aws-config)
          args))
 
 (defn receive-loop
-  [aws-creds & args]
+  [aws-config & args]
   (apply receive/receive-loop
-         (sqs/sqs-ext-client aws-creds)
+         (sqs/sqs-ext-client aws-config)
          args))
 
 (defn- launch-handler-threads
@@ -115,7 +126,7 @@
            auto-delete               true
            format                    :transit}}
    handler-fn]
-  (let [sqs-ext-client (sqs/sqs-ext-client aws-creds s3-bucket-name)
+  (let [sqs-ext-client (sqs/sqs-ext-client aws-creds)
         receive-chan (chan)
         stop-fn (receive/receive-loop sqs-ext-client
                                       queue-url
