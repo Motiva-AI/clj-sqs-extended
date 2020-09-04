@@ -17,14 +17,14 @@
 
 
 (defn sqs-ext-client
-  [aws-config]
-  (let [endpoint (aws/configure-sqs-endpoint aws-config)
-        creds (aws/configure-credentials aws-config)
-        s3-client (when (:s3-bucket-name aws-config)
-                    (s3/s3-client aws-config))
+  [sqs-ext-config]
+  (let [endpoint (aws/configure-sqs-endpoint sqs-ext-config)
+        creds (aws/configure-credentials sqs-ext-config)
+        s3-client (when (:s3-bucket-name sqs-ext-config)
+                    (s3/s3-client sqs-ext-config))
         sqs-config (cond-> (ExtendedClientConfiguration.)
                       s3-client (.withPayloadSupportEnabled s3-client
-                                                            (:s3-bucket-name aws-config)))
+                                                            (:s3-bucket-name sqs-ext-config)))
         builder (AmazonSQSClientBuilder/standard)
         builder (if endpoint (.withEndpointConfiguration builder endpoint) builder)
         builder (if creds (.withCredentials builder creds) builder)]

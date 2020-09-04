@@ -29,14 +29,14 @@
   (testing "Sending a standard message with a nil body yields exception"
     (fixtures/with-test-standard-queue
       (is (thrown? Exception
-                   (sqs-ext/send-message fixtures/aws-config
+                   (sqs-ext/send-message fixtures/sqs-ext-config
                                          @fixtures/test-queue-url
                                          nil)))))
 
   (testing "Sending a FIFO message with a nil body yields exception"
     (fixtures/with-test-fifo-queue
       (is (thrown? Exception
-                   (sqs-ext/send-fifo-message fixtures/aws-config
+                   (sqs-ext/send-fifo-message fixtures/sqs-ext-config
                                               @fixtures/test-queue-url
                                               nil
                                               (helpers/random-group-id)))))))
@@ -46,7 +46,7 @@
     (fixtures/with-test-standard-queue
       (is (thrown-with-msg? SdkClientException
                             #"^.*Unable to execute HTTP request: non-existing-queue.*$"
-                            (sqs-ext/send-message fixtures/aws-config
+                            (sqs-ext/send-message fixtures/sqs-ext-config
                                                   "https://non-existing-queue"
                                                   (first test-messages-basic))))))
 
@@ -54,7 +54,7 @@
     (fixtures/with-test-fifo-queue
       (is (thrown-with-msg? SdkClientException
                             #"^.*Unable to execute HTTP request: non-existing-queue.*$"
-                            (sqs-ext/send-fifo-message fixtures/aws-config
+                            (sqs-ext/send-fifo-message fixtures/sqs-ext-config
                                                        "https://non-existing-queue"
                                                        (first test-messages-basic)
                                                        (helpers/random-group-id)))))))
@@ -68,14 +68,14 @@
           {:handler-opts {:format format}}
 
           (testing "handle-queue can send/receive basic message to standard queue"
-            (is (string? (sqs-ext/send-message fixtures/aws-config
+            (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
                                                @fixtures/test-queue-url
                                                (first test-messages-basic)
                                                {:format format})))
             (is (= (first test-messages-basic) (<!! handler-chan))))
 
           (testing "handle-queue can send/receive large message to standard queue"
-            (is (string? (sqs-ext/send-message fixtures/aws-config
+            (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
                                                @fixtures/test-queue-url
                                                test-message-large
                                                {:format format})))
@@ -85,18 +85,18 @@
 (deftest handle-queue-sends-and-receives-messages-without-bucket
   (testing "handle-queue can send/receive message without using a s3 bucket"
     (let [handler-chan (chan)
-          aws-config-without-bucket (dissoc fixtures/aws-config
-                                            :s3-bucket-name)]
+          sqs-ext-config-without-bucket (dissoc fixtures/sqs-ext-config
+                                                :s3-bucket-name)]
       (fixtures/with-test-standard-queue
         (fixtures/with-handle-queue
           handler-chan
-          {:aws-config {:s3-bucket-name nil}}
+          {:sqs-ext-config {:s3-bucket-name nil}}
 
-          (is (string? (sqs-ext/send-message aws-config-without-bucket
+          (is (string? (sqs-ext/send-message sqs-ext-config-without-bucket
                                              @fixtures/test-queue-url
                                              (first test-messages-basic))))
           (is (= (first test-messages-basic) (<!! handler-chan)))
-          (is (string? (sqs-ext/send-message aws-config-without-bucket
+          (is (string? (sqs-ext/send-message sqs-ext-config-without-bucket
                                              @fixtures/test-queue-url
                                              test-message-with-time)))
           (is (= test-message-with-time (<!! handler-chan)))))
@@ -108,7 +108,7 @@
       (fixtures/with-test-standard-queue
         (fixtures/with-handle-queue-defaults
           handler-chan
-          (is (string? (sqs-ext/send-message fixtures/aws-config
+          (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
                                              @fixtures/test-queue-url
                                              test-message-with-time)))
           (is (= test-message-with-time (<!! handler-chan)))))
@@ -124,7 +124,7 @@
             {:handler-opts {:format format}}
 
             (doseq [message test-messages-basic]
-              (is (string? (sqs-ext/send-fifo-message fixtures/aws-config
+              (is (string? (sqs-ext/send-fifo-message fixtures/sqs-ext-config
                                                       @fixtures/test-queue-url
                                                       message
                                                       (helpers/random-group-id)
@@ -150,9 +150,9 @@
         (let [stats
               (fixtures/with-handle-queue
                 handler-chan
-                {:aws-config {:s3-bucket-name "non-existing-bucket"}})]
+                {:sqs-ext-config {:s3-bucket-name "non-existing-bucket"}})]
 
-          (is (string? (sqs-ext/send-message fixtures/aws-config
+          (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
                                              @fixtures/test-queue-url
                                              test-message-large)))
           (is (contains? stats :stopped-at))))
@@ -206,7 +206,7 @@
              (Thread/sleep (+ (* restart-delay-seconds 1000) 500))
 
              ;; verify that sending/receiving still works ...
-             (is (string? (sqs-ext/send-message fixtures/aws-config
+             (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
                                                 @fixtures/test-queue-url
                                                 test-message-with-time)))
              (is (= test-message-with-time (<!! handler-chan)))
@@ -238,19 +238,19 @@
     (doseq [format [:transit :json]]
       (fixtures/with-test-standard-queue
         (let [out-chan (chan)
-              stop-fn (sqs-ext/receive-loop fixtures/aws-config
+              stop-fn (sqs-ext/receive-loop fixtures/sqs-ext-config
                                             @fixtures/test-queue-url
                                             out-chan
                                             {:format format})]
           (is (fn? stop-fn))
-          (is (string? (sqs-ext/send-message fixtures/aws-config
+          (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
                                              @fixtures/test-queue-url
                                              (first test-messages-basic)
                                              {:format format})))
           (is (= (first test-messages-basic) (:body (<!! out-chan))))
           ;; terminate receive loop and thereby close the out-channel
           (stop-fn)
-          (is (string? (sqs-ext/send-message fixtures/aws-config
+          (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
                                              @fixtures/test-queue-url
                                              (last test-messages-basic)
                                              {:format format})))
@@ -266,7 +266,7 @@
             handler-chan
             {:handler-opts {:auto-delete false}}
 
-            (is (string? (sqs-ext/send-message fixtures/aws-config
+            (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
                                                @fixtures/test-queue-url
                                                (last test-messages-basic))))
             (let [received-message (<!! handler-chan)]
@@ -290,7 +290,7 @@
             handler-chan
             {:handler-opts {:auto-delete true}}
 
-            (is (string? (sqs-ext/send-message fixtures/aws-config
+            (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
                                                @fixtures/test-queue-url
                                                (first test-messages-basic))))
 
@@ -315,21 +315,21 @@
 
 (deftest unreachable-endpoint-yields-proper-exception
   (testing "Trying to connect to an unreachable endpoint yields a proper exception"
-    (let [unreachable-aws-config (merge fixtures/aws-config
+    (let [unreachable-sqs-ext-config (merge fixtures/sqs-ext-config
                                         {:sqs-endpoint "https://unreachable-endpoint"
                                          :s3-endpoint  "https://unreachable-endpoint"})]
       (is (thrown? SdkClientException
-                   (sqs-ext/send-message unreachable-aws-config
+                   (sqs-ext/send-message unreachable-sqs-ext-config
                                          @fixtures/test-queue-url
                                          {:data "here-be-dragons"}))))))
 
 (deftest cannot-send-to-non-existing-bucket
   (testing "Sending a large message using a non-existing S3 bucket yields proper exception"
     (fixtures/with-test-standard-queue
-      (let [non-existing-bucket-aws-config (assoc fixtures/aws-config
+      (let [non-existing-bucket-sqs-ext-config (assoc fixtures/sqs-ext-config
                                                   :s3-bucket-name
                                                   "non-existing-bucket")]
         (is (thrown? AmazonServiceException
-                     (sqs-ext/send-message non-existing-bucket-aws-config
+                     (sqs-ext/send-message non-existing-bucket-sqs-ext-config
                                            "test-queue"
                                            (helpers/random-message-larger-than-256kb))))))))

@@ -22,7 +22,7 @@ $ make devel
 (import '[java.util.concurrent CountDownLatch])
 
 
-(def aws-config
+(def sqs-ext-config
  {:access-key     "default"
   :secret-key     "default"
   :s3-endpoint    "http://localhost:4566"
@@ -30,12 +30,12 @@ $ make devel
   :sqs-endpoint   "http://localhost:4566"
   :region         "us-east-2"})
 
-(def s3-client (s3/s3-client aws-config))
+(def s3-client (s3/s3-client sqs-ext-config))
 
-(s3/create-bucket! s3-client (:s3-bucket-name aws-config))
+(s3/create-bucket! s3-client (:s3-bucket-name sqs-ext-config))
 
 (def example-queue-url
-  (sqs-ext/create-standard-queue! aws-config "example-queue"))
+  (sqs-ext/create-standard-queue! sqs-ext-config "example-queue"))
 
 (defn random-string-with-length
   [length]
@@ -59,7 +59,7 @@ $ make devel
 
 (defn start-action-service-queue-listener
   []
-  (sqs-ext/handle-queue aws-config
+  (sqs-ext/handle-queue sqs-ext-config
                         {:queue-url                 example-queue-url
                          :number-of-handler-threads 1}
                         dispatch-action-service))
@@ -86,7 +86,7 @@ $ make devel
 
   ;; Send a large test message that requires S3 usage to store its payload ...
   (log/infof "Sent message with ID '%s'."
-             (sqs-ext/send-message aws-config
+             (sqs-ext/send-message sqs-ext-config
                                    example-queue-url
                                    (random-message-larger-than-256kb))))
 ```

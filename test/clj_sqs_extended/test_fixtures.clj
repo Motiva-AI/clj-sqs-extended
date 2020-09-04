@@ -7,12 +7,12 @@
             [clj-sqs-extended.test-helpers :as helpers]))
 
 
-(def aws-config {:access-key     (env :access-key)
-                 :secret-key     (env :secret-key)
-                 :s3-endpoint    (env :s3-endpoint)
-                 :s3-bucket-name (helpers/random-bucket-name)
-                 :sqs-endpoint   (env :sqs-endpoint)
-                 :region         (env :region)})
+(def sqs-ext-config {:access-key     (env :access-key)
+                     :secret-key     (env :secret-key)
+                     :s3-endpoint    (env :s3-endpoint)
+                     :s3-bucket-name (helpers/random-bucket-name)
+                     :sqs-endpoint   (env :sqs-endpoint)
+                     :region         (env :region)})
 
 (defonce test-sqs-ext-client (atom nil))
 (defonce test-queue-url (atom nil))
@@ -21,26 +21,26 @@
 
 (defn with-test-sqs-ext-client
   [f]
-  (let [s3-client (s3/s3-client aws-config)]
-    (s3/create-bucket! s3-client (:s3-bucket-name aws-config))
-    (reset! test-sqs-ext-client (sqs/sqs-ext-client aws-config))
+  (let [s3-client (s3/s3-client sqs-ext-config)]
+    (s3/create-bucket! s3-client (:s3-bucket-name sqs-ext-config))
+    (reset! test-sqs-ext-client (sqs/sqs-ext-client sqs-ext-config))
     (f)
-    (s3/purge-bucket! s3-client (:s3-bucket-name aws-config))))
+    (s3/purge-bucket! s3-client (:s3-bucket-name sqs-ext-config))))
 
 (defn with-test-sqs-ext-client-no-s3
   [f]
-  (reset! test-sqs-ext-client (sqs/sqs-ext-client aws-config))
+  (reset! test-sqs-ext-client (sqs/sqs-ext-client sqs-ext-config))
   (f))
 
 (defn wrap-standard-queue
   [f]
   (reset! test-queue-url
-          (sqs-ext/create-standard-queue! aws-config
+          (sqs-ext/create-standard-queue! sqs-ext-config
                                           test-standard-queue-name))
   (f)
   ;; TODO: https://github.com/Motiva-AI/clj-sqs-extended/issues/27
   (Thread/sleep 500)
-  (sqs-ext/delete-queue! aws-config
+  (sqs-ext/delete-queue! sqs-ext-config
                          @test-queue-url))
 
 (defmacro with-test-standard-queue
@@ -50,12 +50,12 @@
 (defn wrap-fifo-queue
   [f]
   (reset! test-queue-url
-          (sqs-ext/create-fifo-queue! aws-config
+          (sqs-ext/create-fifo-queue! sqs-ext-config
                                       test-fifo-queue-name))
   (f)
   ;; TODO: https://github.com/Motiva-AI/clj-sqs-extended/issues/27
   (Thread/sleep 500)
-  (sqs-ext/delete-queue! aws-config
+  (sqs-ext/delete-queue! sqs-ext-config
                          @test-queue-url))
 
 (defmacro with-test-fifo-queue
@@ -71,9 +71,8 @@
 
 (defn wrap-handle-queue
   [handler-chan settings f]
-  (let [handler-config (merge {:queue-url @test-queue-url}
-                              (:handler-opts settings))
-        stop-fn (sqs-ext/handle-queue (merge aws-config (:aws-config settings))
+  (let [handler-config (merge {:queue-url @test-queue-url} (:handler-opts settings))
+        stop-fn (sqs-ext/handle-queue (merge sqs-ext-config (:sqs-ext-config settings))
                                       handler-config
                                       (partial test-handler-fn handler-chan))]
     (f)

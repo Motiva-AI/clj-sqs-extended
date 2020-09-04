@@ -7,51 +7,51 @@
 
 ;; Conveniance declarations
 (defn create-standard-queue!
-  [aws-config & args]
+  [sqs-ext-config & args]
   (apply sqs/create-standard-queue!
-         (sqs/sqs-ext-client aws-config)
+         (sqs/sqs-ext-client sqs-ext-config)
          args))
 
 (defn create-fifo-queue!
-  [aws-config & args]
+  [sqs-ext-config & args]
   (apply sqs/create-fifo-queue!
-         (sqs/sqs-ext-client aws-config)
+         (sqs/sqs-ext-client sqs-ext-config)
          args))
 
 (defn purge-queue!
-  [aws-config & args]
+  [sqs-ext-config & args]
   (apply sqs/purge-queue!
-         (sqs/sqs-ext-client aws-config)
+         (sqs/sqs-ext-client sqs-ext-config)
          args))
 
 (defn delete-queue!
-  [aws-config & args]
+  [sqs-ext-config & args]
   (apply sqs/delete-queue!
-         (sqs/sqs-ext-client aws-config)
+         (sqs/sqs-ext-client sqs-ext-config)
          args))
 
 (defn send-message
-  [aws-config & args]
+  [sqs-ext-config & args]
   (apply sqs/send-message
-         (sqs/sqs-ext-client aws-config)
+         (sqs/sqs-ext-client sqs-ext-config)
          args))
 
 (defn send-fifo-message
-  [aws-config & args]
+  [sqs-ext-config & args]
   (apply sqs/send-fifo-message
-         (sqs/sqs-ext-client aws-config)
+         (sqs/sqs-ext-client sqs-ext-config)
          args))
 
 (defn delete-message!
-  [aws-config & args]
+  [sqs-ext-config & args]
   (apply sqs/delete-message!
-         (sqs/sqs-ext-client aws-config)
+         (sqs/sqs-ext-client sqs-ext-config)
          args))
 
 (defn receive-loop
-  [aws-config & args]
+  [sqs-ext-config & args]
   (apply receive/receive-loop
-         (sqs/sqs-ext-client aws-config)
+         (sqs/sqs-ext-client sqs-ext-config)
          args))
 
 (defn- launch-handler-threads
@@ -73,11 +73,11 @@
   "Setup a loop that listens to a queue and processes all incoming messages.
 
   Arguments:
-    aws-config - A map of the following optional keys used for accessing AWS services:
+    sqs-ext-config - A map of the following optional keys used for accessing AWS services:
       access-key     - AWS access key ID
       secret-key     - AWS secret access key
       s3-endpoint    - AWS S3 endpoint (protocol://service-code.region-code.amazonaws.com)
-      s3-bucket-name - AWS S3 bucket to use to store messages bigger than 256kb (optional)
+      s3-bucket-name - AWS S3 bucket to use to store messages larger than 256kb (optional)
       sqs-endpoint   - AWS SQS endpoint (protocol://service-code.region-code.amazonaws.com)
       region         - AWS region
 
@@ -119,7 +119,7 @@
            s3-endpoint  "http://localhost:4566"
            sqs-endpoint "http://localhost:4566"
            region       "us-east-2"}
-    :as   aws-config}
+    :as   sqs-ext-config}
    {:keys [queue-url
            number-of-handler-threads
            restart-limit
@@ -132,7 +132,7 @@
            auto-delete               true
            format                    :transit}}
    handler-fn]
-  (let [sqs-ext-client (sqs/sqs-ext-client aws-config)
+  (let [sqs-ext-client (sqs/sqs-ext-client sqs-ext-config)
         receive-chan (chan)
         stop-fn (receive/receive-loop sqs-ext-client
                                       queue-url
