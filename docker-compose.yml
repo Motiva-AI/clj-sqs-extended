@@ -1,5 +1,19 @@
 version: "3.8"
 services:
+  app:
+    build: .
+    volumes:
+      - .:/code
+      - ~/.m2:/root/.m2
+    environment:
+      ACCESS_KEY: "local"
+      SECRET_KEY: "local"
+
+      S3_ENDPOINT: "http://localstack:4566"
+      SQS_ENDPOINT: "http://localstack:4566"
+
+    depends_on:
+       - localstack
 
   localstack:
     image: localstack/localstack
