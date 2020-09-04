@@ -57,11 +57,7 @@
     (fixtures/with-test-standard-queue
       (sqs/send-message @fixtures/test-sqs-ext-client
                         @fixtures/test-queue-url
-                        test-message-larger-than-256kb
-                        {:format :raw})
+                        test-message-larger-than-256kb)
       (let [response (sqs/receive-message @fixtures/test-sqs-ext-client
-                                          @fixtures/test-queue-url
-                                          {:format :raw})
-            desired-length (count test-message-larger-than-256kb)
-            response-length (->> (:body response) (count))]
-        (is (= desired-length response-length))))))
+                                          @fixtures/test-queue-url)]
+        (is (= test-message-larger-than-256kb (:body response)))))))

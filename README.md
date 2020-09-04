@@ -12,6 +12,7 @@ Spin up some services via Docker on your localhost to try the following:
 $ make devel
 ```
 
+**TODO: This needs to be updated!**
 
 ```clj
 (require '[clojure.tools.logging :as log]
@@ -21,27 +22,20 @@ $ make devel
 (import '[java.util.concurrent CountDownLatch])
 
 
-(def aws-config
- {:access-key   "default"
-  :secret-key   "default"
-  :s3-endpoint  "http://localhost:4566"
-  :sqs-endpoint "http://localhost:4566"
-  :region       "us-east-2"})
+(def sqs-ext-config
+ {:access-key     "default"
+  :secret-key     "default"
+  :s3-endpoint    "http://localhost:4566"
+  :s3-bucket-name "example-bucket"
+  :sqs-endpoint   "http://localhost:4566"
+  :region         "us-east-2"})
 
-(defonce queue-config (atom
-                       {:s3-bucket-name            "example-bucket"
-                        :number-of-handler-threads 1}))
+(def s3-client (s3/s3-client sqs-ext-config))
 
-(def s3-client (s3/s3-client aws-config))
+(s3/create-bucket! s3-client (:s3-bucket-name sqs-ext-config))
 
-(s3/create-bucket s3-client (:s3-bucket-name @queue-config))
-
-(def sqs-ext-client (sqs-ext/sqs-ext-client aws-config
-                                            (:s3-bucket-name @queue-config)))
-
-(swap! queue-config
-       assoc :queue-url
-       (sqs-ext/create-standard-queue sqs-ext-client "example-queue"))
+(def example-queue-url
+  (sqs-ext/create-standard-queue! sqs-ext-config "example-queue"))
 
 (defn random-string-with-length
   [length]
@@ -57,20 +51,17 @@ $ make devel
 (defn dispatch-action-service
   ([message]
    (log/infof "I got '%s'..."
-              (subs (get-in message [:body :payload])
-                    0
-                    32)))
+              (subs (:payload message) 0 32)))
   ([message done-fn]
    (log/infof "I got '%s'..."
-              (subs (get-in message [:body :payload])
-                    0
-                    32))
+              (subs (:payload message) 0 32))
    (done-fn)))
 
 (defn start-action-service-queue-listener
   []
-  (sqs-ext/handle-queue aws-config
-                        @queue-config
+  (sqs-ext/handle-queue sqs-ext-config
+                        {:queue-url                 example-queue-url
+                         :number-of-handler-threads 1}
                         dispatch-action-service))
 
 (defn start-queue-listeners
@@ -95,8 +86,8 @@ $ make devel
 
   ;; Send a large test message that requires S3 usage to store its payload ...
   (log/infof "Sent message with ID '%s'."
-             (sqs-ext/send-message sqs-ext-client
-                                   (:queue-url @queue-config)
+             (sqs-ext/send-message sqs-ext-config
+                                   example-queue-url
                                    (random-message-larger-than-256kb))))
 ```
 

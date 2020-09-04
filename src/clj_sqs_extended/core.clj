@@ -6,12 +6,53 @@
 
 
 ;; Conveniance declarations
-(def sqs-ext-client sqs/sqs-ext-client)
-(def create-standard-queue sqs/create-standard-queue)
-(def create-fifo-queue sqs/create-fifo-queue)
-(def send-message sqs/send-message)
-(def send-fifo-message sqs/send-fifo-message)
-(def receive-loop receive/receive-loop)
+(defn create-standard-queue!
+  [sqs-ext-config & args]
+  (apply sqs/create-standard-queue!
+         (sqs/sqs-ext-client sqs-ext-config)
+         args))
+
+(defn create-fifo-queue!
+  [sqs-ext-config & args]
+  (apply sqs/create-fifo-queue!
+         (sqs/sqs-ext-client sqs-ext-config)
+         args))
+
+(defn purge-queue!
+  [sqs-ext-config & args]
+  (apply sqs/purge-queue!
+         (sqs/sqs-ext-client sqs-ext-config)
+         args))
+
+(defn delete-queue!
+  [sqs-ext-config & args]
+  (apply sqs/delete-queue!
+         (sqs/sqs-ext-client sqs-ext-config)
+         args))
+
+(defn send-message
+  [sqs-ext-config & args]
+  (apply sqs/send-message
+         (sqs/sqs-ext-client sqs-ext-config)
+         args))
+
+(defn send-fifo-message
+  [sqs-ext-config & args]
+  (apply sqs/send-fifo-message
+         (sqs/sqs-ext-client sqs-ext-config)
+         args))
+
+(defn delete-message!
+  [sqs-ext-config & args]
+  (apply sqs/delete-message!
+         (sqs/sqs-ext-client sqs-ext-config)
+         args))
+
+(defn receive-loop
+  [sqs-ext-config & args]
+  (apply receive/receive-loop
+         (sqs/sqs-ext-client sqs-ext-config)
+         args))
 
 (defn- launch-handler-threads
   [number-of-handler-threads receive-chan auto-delete handler-fn]
@@ -32,17 +73,16 @@
   "Setup a loop that listens to a queue and processes all incoming messages.
 
   Arguments:
-    aws-creds - A map of the following optional keys used for accessing AWS services:
-      access-key   - AWS access key ID
-      secret-key   - AWS secret access key
-      s3-endpoint  - AWS S3 endpoint (protocol://service-code.region-code.amazonaws.com)
-      sqs-endpoint - AWS SQS endpoint (protocol://service-code.region-code.amazonaws.com)
-      region       - AWS region
+    sqs-ext-config - A map of the following optional keys used for accessing AWS services:
+      access-key     - AWS access key ID
+      secret-key     - AWS secret access key
+      s3-endpoint    - AWS S3 endpoint (protocol://service-code.region-code.amazonaws.com)
+      s3-bucket-name - AWS S3 bucket to use to store messages larger than 256kb (optional)
+      sqs-endpoint   - AWS SQS endpoint (protocol://service-code.region-code.amazonaws.com)
+      region         - AWS region
 
-    queue-opts - A map for the configuration settings of the queue to handle:
+    handler-opts - A map for the queue handling settings:
       queue-url                 - A string containing the unique URL of the queue to handle (required)
-      s3-bucket-name            - A string containing the name of an existing S3 bucket to use to store
-                                  large messages (required)
       number-of-handler-threads - Number of how many threads to run for handling message receival
                                   (optional, default: 4)
       restart-limit             - If a potentially non-fatal error occurs while handling the queue,
@@ -71,6 +111,7 @@
   [{:keys [access-key
            secret-key
            s3-endpoint
+           s3-bucket-name
            sqs-endpoint
            region]
     :or   {access-key   "default"
@@ -78,9 +119,8 @@
            s3-endpoint  "http://localhost:4566"
            sqs-endpoint "http://localhost:4566"
            region       "us-east-2"}
-    :as   aws-creds}
+    :as   sqs-ext-config}
    {:keys [queue-url
-           s3-bucket-name
            number-of-handler-threads
            restart-limit
            restart-delay-seconds
@@ -92,7 +132,7 @@
            auto-delete               true
            format                    :transit}}
    handler-fn]
-  (let [sqs-ext-client (sqs/sqs-ext-client aws-creds s3-bucket-name)
+  (let [sqs-ext-client (sqs/sqs-ext-client sqs-ext-config)
         receive-chan (chan)
         stop-fn (receive/receive-loop sqs-ext-client
                                       queue-url

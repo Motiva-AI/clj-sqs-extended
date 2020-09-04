@@ -7,29 +7,41 @@
             [clj-sqs-extended.test-helpers :as helpers]))
 
 
-(def aws-config {:access-key   (env :access-key)
-                 :secret-key   (env :secret-key)
-                 :s3-endpoint  (env :s3-endpoint)
-                 :sqs-endpoint (env :sqs-endpoint)
-                 :region       (env :region)})
+(def sqs-ext-config {:access-key     (env :access-key)
+                     :secret-key     (env :secret-key)
+                     :s3-endpoint    (env :s3-endpoint)
+                     :s3-bucket-name (helpers/random-bucket-name)
+                     :sqs-endpoint   (env :sqs-endpoint)
+                     :region         (env :region)})
 
 (defonce test-sqs-ext-client (atom nil))
 (defonce test-queue-url (atom nil))
-
 (defonce test-standard-queue-name (helpers/random-queue-name))
 (defonce test-fifo-queue-name (helpers/random-queue-name {:suffix ".fifo"}))
-(defonce test-bucket-name (helpers/random-bucket-name))
+
+(defn with-test-sqs-ext-client
+  [f]
+  (let [s3-client (s3/s3-client sqs-ext-config)]
+    (s3/create-bucket! s3-client (:s3-bucket-name sqs-ext-config))
+    (reset! test-sqs-ext-client (sqs/sqs-ext-client sqs-ext-config))
+    (f)
+    (s3/purge-bucket! s3-client (:s3-bucket-name sqs-ext-config))))
+
+(defn with-test-sqs-ext-client-no-s3
+  [f]
+  (reset! test-sqs-ext-client (sqs/sqs-ext-client sqs-ext-config))
+  (f))
 
 (defn wrap-standard-queue
   [f]
   (reset! test-queue-url
-          (sqs/create-standard-queue @test-sqs-ext-client
-                                     test-standard-queue-name))
+          (sqs-ext/create-standard-queue! sqs-ext-config
+                                          test-standard-queue-name))
   (f)
   ;; TODO: https://github.com/Motiva-AI/clj-sqs-extended/issues/27
   (Thread/sleep 500)
-  (sqs/delete-queue! @test-sqs-ext-client
-                     @test-queue-url))
+  (sqs-ext/delete-queue! sqs-ext-config
+                         @test-queue-url))
 
 (defmacro with-test-standard-queue
   [& body]
@@ -38,26 +50,17 @@
 (defn wrap-fifo-queue
   [f]
   (reset! test-queue-url
-          (sqs/create-fifo-queue @test-sqs-ext-client
-                                 test-fifo-queue-name))
+          (sqs-ext/create-fifo-queue! sqs-ext-config
+                                      test-fifo-queue-name))
   (f)
   ;; TODO: https://github.com/Motiva-AI/clj-sqs-extended/issues/27
   (Thread/sleep 500)
-  (sqs/delete-queue! @test-sqs-ext-client
-                     @test-queue-url))
+  (sqs-ext/delete-queue! sqs-ext-config
+                         @test-queue-url))
 
 (defmacro with-test-fifo-queue
   [& body]
   `(wrap-fifo-queue (fn [] ~@body)))
-
-(defn with-test-sqs-ext-client
-  [f]
-  (let [s3-client (s3/s3-client aws-config)]
-    (s3/create-bucket s3-client test-bucket-name)
-    (reset! test-sqs-ext-client (sqs/sqs-ext-client aws-config
-                                                    test-bucket-name))
-    (f)
-    (s3/purge-bucket s3-client test-bucket-name)))
 
 (defn test-handler-fn
   ([chan message]
@@ -67,104 +70,24 @@
    (>!! chan message)))
 
 (defn wrap-handle-queue
-  [handler-chan queue-url auto-stop aws-opts queue-opts f]
-  (let [queue-config (merge {:queue-url      queue-url
-                             :s3-bucket-name test-bucket-name}
-                            queue-opts)
-        stop-fn (sqs-ext/handle-queue (merge aws-config aws-opts)
-                                      queue-config
+  [handler-chan settings f]
+  (let [handler-config (merge {:queue-url @test-queue-url} (:handler-opts settings))
+        stop-fn (sqs-ext/handle-queue (merge sqs-ext-config (:sqs-ext-config settings))
+                                      handler-config
                                       (partial test-handler-fn handler-chan))]
     (f)
-    (if auto-stop
+    (if (:auto-stop-loop settings)
       (stop-fn)
       stop-fn)))
 
-(defmacro with-handle-queue-full-opts-standard
-  [handler-chan aws-opts queue-opts & body]
-  `(wrap-handle-queue ~handler-chan
-                      @test-queue-url
-                      true
-                      ~aws-opts
-                      ~queue-opts
-                      (fn [] ~@body)))
+(defmacro with-handle-queue-defaults
+  ([handler-chan & body]
+   `(wrap-handle-queue ~handler-chan
+                       {:auto-stop-loop true}
+                       (fn [] ~@body))))
 
-(defmacro with-handle-queue-full-opts-fifo
-  [handler-chan aws-opts queue-opts & body]
-  `(wrap-handle-queue ~handler-chan
-                      @test-queue-url
-                      true
-                      ~aws-opts
-                      ~queue-opts
-                      (fn [] ~@body)))
-
-(defmacro with-handle-queue-aws-opts-standard
-  [handler-chan aws-opts & body]
-  `(wrap-handle-queue ~handler-chan
-                      @test-queue-url
-                      true
-                      ~aws-opts
-                      {}
-                      (fn [] ~@body)))
-
-(defmacro with-handle-queue-aws-opts-fifo
-  [handler-chan aws-opts & body]
-  `(wrap-handle-queue ~handler-chan
-                      @test-queue-url
-                      true
-                      ~aws-opts
-                      {}
-                      (fn [] ~@body)))
-
-(defmacro with-handle-queue-queue-opts-standard
-  [handler-chan queue-opts & body]
-  `(wrap-handle-queue ~handler-chan
-                      @test-queue-url
-                      true
-                      {}
-                      ~queue-opts
-                      (fn [] ~@body)))
-
-(defmacro with-handle-queue-queue-opts-standard-no-autostop
-  [handler-chan queue-opts & body]
-  `(wrap-handle-queue ~handler-chan
-                      @test-queue-url
-                      false
-                      {}
-                      ~queue-opts
-                      (fn [] ~@body)))
-
-(defmacro with-handle-queue-queue-opts-fifo
-  [handler-chan queue-opts & body]
-  `(wrap-handle-queue ~handler-chan
-                      @test-queue-url
-                      true
-                      {}
-                      ~queue-opts
-                      (fn [] ~@body)))
-
-(defmacro with-handle-queue-standard
-  [handler-chan & body]
-  `(wrap-handle-queue ~handler-chan
-                      @test-queue-url
-                      true
-                      {}
-                      {}
-                      (fn [] ~@body)))
-
-(defmacro with-handle-queue-standard-no-autostop
-  [handler-chan & body]
-  `(wrap-handle-queue ~handler-chan
-                      @test-queue-url
-                      false
-                      {}
-                      {}
-                      (fn [] ~@body)))
-
-(defmacro with-handle-queue-fifo
-  [handler-chan & body]
-  `(wrap-handle-queue ~handler-chan
-                      @test-queue-url
-                      true
-                      {}
-                      {}
-                      (fn [] ~@body)))
+(defmacro with-handle-queue
+  ([handler-chan settings & body]
+   `(wrap-handle-queue ~handler-chan
+                       (merge {:auto-stop-loop true} ~settings)
+                       (fn [] ~@body))))

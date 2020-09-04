@@ -22,15 +22,15 @@
 (defn- init-receive-loop-state
   [sqs-ext-client queue-url receive-opts out-chan]
   (log/infof "Initializing new receive-loop state for queue '%s' ..." queue-url)
-  (atom {:running    true
-         :stats      {:iteration     0
-                      :restart-count 0
-                      :started-at    (t/now)}
-         :queue-url  queue-url
-         :in-chan    (sqs/receive-message-channeled sqs-ext-client
-                                                    queue-url
-                                                    receive-opts)
-         :out-chan   out-chan}))
+  (atom {:running   true
+         :stats     {:iteration     0
+                     :restart-count 0
+                     :started-at    (t/now)}
+         :queue-url queue-url
+         :in-chan   (sqs/receive-message-channeled sqs-ext-client
+                                                   queue-url
+                                                   receive-opts)
+         :out-chan  out-chan}))
 
 (defn- update-receive-loop-stats
   [loop-state]
@@ -105,9 +105,9 @@
 
 (defn- process-message
   [sqs-ext-client loop-state message auto-delete]
-  (let [done-fn #(sqs/delete-message sqs-ext-client
-                                     (:queue-url @loop-state)
-                                     message)
+  (let [done-fn #(sqs/delete-message! sqs-ext-client
+                                      (:queue-url @loop-state)
+                                      message)
         msg (cond-> message
                     (not auto-delete) (assoc :done-fn done-fn))]
     (if (:body message)

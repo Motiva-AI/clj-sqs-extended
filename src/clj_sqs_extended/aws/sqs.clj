@@ -17,14 +17,14 @@
 
 
 (defn sqs-ext-client
-  [aws-config & [s3-bucket-name]]
-  (let [endpoint (aws/configure-sqs-endpoint aws-config)
-        creds (aws/configure-credentials aws-config)
-        s3-client (when (some? s3-bucket-name) (s3/s3-client aws-config))
-        sqs-config (if s3-client
-                     (-> (ExtendedClientConfiguration.)
-                         (.withPayloadSupportEnabled s3-client s3-bucket-name))
-                     (ExtendedClientConfiguration.))
+  [sqs-ext-config]
+  (let [endpoint (aws/configure-sqs-endpoint sqs-ext-config)
+        creds (aws/configure-credentials sqs-ext-config)
+        s3-client (when (:s3-bucket-name sqs-ext-config)
+                    (s3/s3-client sqs-ext-config))
+        sqs-config (cond-> (ExtendedClientConfiguration.)
+                      s3-client (.withPayloadSupportEnabled s3-client
+                                                            (:s3-bucket-name sqs-ext-config)))
         builder (AmazonSQSClientBuilder/standard)
         builder (if endpoint (.withEndpointConfiguration builder endpoint) builder)
         builder (if creds (.withCredentials builder creds) builder)]
@@ -49,10 +49,9 @@
        (doto request (.addAttributesEntry
                        "KmsDataKeyReusePeriodSeconds" kms-data-key-reuse-period)))
      (->> (.createQueue sqs-client request)
-         (.getQueueUrl)))))
+          (.getQueueUrl)))))
 
-
-(defn create-standard-queue
+(defn create-standard-queue!
   ([sqs-client queue-name]
    (create-queue sqs-client queue-name {}))
 
@@ -63,7 +62,7 @@
      :as   opts}]
    (create-queue sqs-client queue-name opts)))
 
-(defn create-fifo-queue
+(defn create-fifo-queue!
   ([sqs-client queue-name]
    (create-queue sqs-client queue-name {:fifo true}))
 
@@ -139,7 +138,7 @@
           (.sendMessage sqs-client)
           (.getMessageId)))))
 
-(defn delete-message
+(defn delete-message!
   [sqs-client queue-url message]
   (->> (DeleteMessageRequest. queue-url (:receiptHandle message))
        (.deleteMessage sqs-client)))
