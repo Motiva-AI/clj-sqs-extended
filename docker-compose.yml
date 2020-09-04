@@ -1,18 +1,26 @@
 version: "3.8"
 services:
+  app:
+    build: .
+    volumes:
+      - .:/code
+      - ~/.m2:/root/.m2
+    environment:
+      ACCESS_KEY: "local"
+      SECRET_KEY: "local"
+
+      S3_ENDPOINT: "http://localstack:4566"
+      SQS_ENDPOINT: "http://localstack:4566"
+
+    depends_on:
+       - localstack
 
   localstack:
     image: localstack/localstack
-    container_name: localstack
     ports:
-      - "4566-4599:4566-4599"
-      - "9000:9000"
+      - "4566:4566"
     environment:
-      - SERVICES=sqs,s3
-      - DEFAULT_REGION=us-east-2
-      - DATA_DIR=/tmp/localstack/data
-      - TMPDIR=/tmp/localstack
-      - HOST_TMP_FOLDER=/tmp
-      - PORT_WEB_UI=9000
-      - LAMBDA_EXECUTOR=local
-      - DOCKER_HOST=unix:///var/run/docker.sock
+      SERVICES:          "sqs,s3"
+      # fixes issue https://github.com/localstack/localstack/issues/1485
+      HOSTNAME_EXTERNAL: "localstack"
+

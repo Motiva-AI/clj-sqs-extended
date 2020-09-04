@@ -4,17 +4,6 @@ jobs:
   build:
     docker:
       - image: circleci/clojure:openjdk-11-lein
-        environment:
-          JVM_OPTS: -Xmx3200m
-          AWS_DEFAULT_REGION: us-east-2
-          AWS_SECRET_ACCESS_KEY: foo
-          AWS_ACCESS_KEY_ID: bar
-      - image: localstack/localstack
-        environment:
-          SERVICES: "sqs,s3"
-
-    environment:
-      DOCKERIZE_VERSION: v0.6.1
 
     steps:
       - checkout
@@ -25,37 +14,22 @@ jobs:
           # fallback to using the latest cache if no exact match is found
           - v1-clj-sqs-extended-library-wrapper-
 
+      - setup_remote_docker
+
       - run:
           name: Install dependencies
-          command: lein -U deps
-
-      - run:
-          name: Install dockerize if not cached
-          command:
-            if \[ -f ~/dockerize \]; then
-              echo "Found cached version of dockerize, skipping installation.";
-            else
-              wget https://github.com/jwilder/dockerize/releases/download/$DOCKERIZE_VERSION/dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz
-              && tar -C ~ -xzvf dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz
-              && rm dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz;
-            fi
-
-      - run:
-          name: Wait for LocalStack edge port to become ready
-          command: dockerize -wait tcp://localhost:4566 -timeout 1m
+          command: docker-compose run --no-deps app lein -U deps
 
       - run:
           name: Run tests
-          command: lein test :all
+          command: docker-compose run app sh -c "dev/resources/wait_for.sh localstack:4566 -t 60 -- lein test :all"
 
       - store_test_results:
           path: target/test_output
 
       - save_cache:
           paths:
-            - ~/dockerize
             - ~/.m2
-            - .cpcache
           key: v1-clj-sqs-extended-library-wrapper-{{ checksum "project.clj" }}
 
       - deploy:
