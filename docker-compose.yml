@@ -23,6 +23,8 @@ services:
       - "9000:9000"
     environment:
       - SERVICES=sqs,s3
+      # fixes an issue with LocalStack https://github.com/localstack/localstack/issues/1485
+      - HOSTNAME_EXTERNAL=localstack
       - DEFAULT_REGION=us-east-2
       - DATA_DIR=/tmp/localstack/data
       - TMPDIR=/tmp/localstack
