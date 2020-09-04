@@ -38,16 +38,18 @@
     {:keys [fifo
             kms-master-key-id
             kms-data-key-reuse-period]}]
-   (let [request (CreateQueueRequest. name)]
-     (when fifo
-       (doto request (.addAttributesEntry
-                       "FifoQueue" "true")))
-     (when kms-master-key-id
-       (doto request (.addAttributesEntry
-                       "KmsMasterKeyId" kms-master-key-id)))
-     (when kms-data-key-reuse-period
-       (doto request (.addAttributesEntry
-                       "KmsDataKeyReusePeriodSeconds" kms-data-key-reuse-period)))
+   (let [request (cond-> (CreateQueueRequest. name)
+                   fifo
+                   (doto (.addAttributesEntry
+                           "FifoQueue" "true"))
+                   kms-master-key-id
+                   (.addAttributesEntry
+                     "KmsMasterKeyId" kms-master-key-id)
+
+                   kms-data-key-reuse-period
+                   (.addAttributesEntry
+                     "KmsDataKeyReusePeriodSeconds" kms-data-key-reuse-period))]
+
      (->> (.createQueue sqs-client request)
           (.getQueueUrl)))))
 
