@@ -65,7 +65,6 @@
       (fixtures/with-test-standard-queue
         (fixtures/with-handle-queue
           handler-chan
-          true
           {:handler-opts {:format format}}
 
           (testing "handle-queue can send/receive basic message to standard queue"
@@ -91,7 +90,6 @@
       (fixtures/with-test-standard-queue
         (fixtures/with-handle-queue
           handler-chan
-          true
           {:aws-config {:s3-bucket-name nil}}
 
           (is (string? (sqs-ext/send-message aws-config-without-bucket
@@ -110,7 +108,6 @@
       (fixtures/with-test-standard-queue
         (fixtures/with-handle-queue-defaults
           handler-chan
-          true
           (is (string? (sqs-ext/send-message fixtures/aws-config
                                              @fixtures/test-queue-url
                                              test-message-with-time)))
@@ -124,7 +121,6 @@
         (fixtures/with-test-fifo-queue
           (fixtures/with-handle-queue
             handler-chan
-            true
             {:handler-opts {:format format}}
 
             (doseq [message test-messages-basic]
@@ -143,7 +139,6 @@
     (let [handler-chan (chan)
           stats (fixtures/with-handle-queue
                    handler-chan
-                   true
                    {:handler-opts {:queue-url "https://non-existing-queue"}})]
          (is (contains? stats :stopped-at))
       (close! handler-chan))))
@@ -155,7 +150,6 @@
         (let [stats
               (fixtures/with-handle-queue
                 handler-chan
-                true
                 {:aws-config {:s3-bucket-name "non-existing-bucket"}})]
 
           (is (string? (sqs-ext/send-message fixtures/aws-config
@@ -178,9 +172,9 @@
                  restart-delay-seconds 1
                  stop-fn (fixtures/with-handle-queue
                            handler-chan
-                           false
-                           {:handler-opts {:restart-limit         restart-limit
-                                           :restart-delay-seconds restart-delay-seconds}})]
+                           {:auto-stop-loop false
+                            :handler-opts   {:restart-limit         restart-limit
+                                             :restart-delay-seconds restart-delay-seconds}})]
              (Thread/sleep (+ (* restart-limit (* restart-delay-seconds 1000)) 500))
              (let [stats (stop-fn)]
                (is (= (:restart-count stats) restart-limit))))))
@@ -206,8 +200,8 @@
           #(let [restart-delay-seconds 1
                  stop-fn (fixtures/with-handle-queue
                            handler-chan
-                           false
-                           {:handler-opts {:restart-delay-seconds restart-delay-seconds}})]
+                           {:auto-stop-loop false
+                            :handler-opts   {:restart-delay-seconds restart-delay-seconds}})]
              ;; give the loop some time to handle that error ...
              (Thread/sleep (+ (* restart-delay-seconds 1000) 500))
 
@@ -233,8 +227,7 @@
                          (fn [_ _ _]
                            (RuntimeException. "Testing runtime error"))}
           #(let [stats (fixtures/with-handle-queue-defaults
-                         handler-chan
-                         true)]
+                         handler-chan)]
              (Thread/sleep 500)
              (is (= (:restart-count stats) 0))
              (is (contains? stats :stopped-at)))))
@@ -271,7 +264,6 @@
         (fixtures/with-test-standard-queue
           (fixtures/with-handle-queue
             handler-chan
-            true
             {:handler-opts {:auto-delete false}}
 
             (is (string? (sqs-ext/send-message fixtures/aws-config
@@ -296,7 +288,6 @@
         (fixtures/with-test-standard-queue
           (fixtures/with-handle-queue
             handler-chan
-            true
             {:handler-opts {:auto-delete true}}
 
             (is (string? (sqs-ext/send-message fixtures/aws-config

@@ -70,27 +70,25 @@
    (>!! chan message)))
 
 (defn wrap-handle-queue
-  [handler-chan auto-stop settings f]
+  [handler-chan settings f]
   (let [handler-config (merge {:queue-url @test-queue-url}
                               (:handler-opts settings))
         stop-fn (sqs-ext/handle-queue (merge aws-config (:aws-config settings))
                                       handler-config
                                       (partial test-handler-fn handler-chan))]
     (f)
-    (if auto-stop
+    (if (:auto-stop-loop settings)
       (stop-fn)
       stop-fn)))
 
 (defmacro with-handle-queue-defaults
-  ([handler-chan auto-stop & body]
+  ([handler-chan & body]
    `(wrap-handle-queue ~handler-chan
-                       ~auto-stop
-                       {}
+                       {:auto-stop-loop true}
                        (fn [] ~@body))))
 
 (defmacro with-handle-queue
-  ([handler-chan auto-stop settings & body]
+  ([handler-chan settings & body]
    `(wrap-handle-queue ~handler-chan
-                       ~auto-stop
-                       ~settings
+                       (merge {:auto-stop-loop true} ~settings)
                        (fn [] ~@body))))

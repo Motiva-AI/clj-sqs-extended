@@ -18,6 +18,12 @@
          (sqs/sqs-ext-client aws-config)
          args))
 
+(defn purge-queue!
+  [aws-config & args]
+  (apply sqs/purge-queue!
+         (sqs/sqs-ext-client aws-config)
+         args))
+
 (defn delete-queue!
   [aws-config & args]
   (apply sqs/delete-queue!
