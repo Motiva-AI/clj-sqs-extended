@@ -30,13 +30,6 @@
         builder (if creds (.withCredentials builder creds) builder)]
     (AmazonSQSExtendedClient. (.build builder) sqs-config)))
 
-(defn- queue-name-to-url
-   [sqs-client name]
-   ;; WATCHOUT: Yes, there will be a GetQueueUrlResult returned for which getQueueUrl
-   ;;           has to be called again.
-   (->> (.getQueueUrl sqs-client name)
-        (.getQueueUrl)))
-
 (defn- create-queue
   ([sqs-client name]
    (create-queue sqs-client name {}))
@@ -56,13 +49,8 @@
                    kms-data-key-reuse-period
                    (.addAttributesEntry
                      "KmsDataKeyReusePeriodSeconds" kms-data-key-reuse-period))]
-     (.createQueue sqs-client request)
-
-     ;; WARN we could call .getQueueUrl from the result of .createQueue
-     ;; directly, but the hostname from there appears to be hardcoded to
-     ;; localhost for some reason
-     ;; https://github.com/Motiva-AI/clj-sqs-extended/issues/70
-     (queue-name-to-url sqs-client name))))
+     (->> (.createQueue sqs-client request)
+          (.getQueueUrl)))))
 
 (defn create-standard-queue!
   ([sqs-client queue-name]
