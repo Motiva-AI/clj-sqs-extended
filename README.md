@@ -12,6 +12,7 @@ Spin up some services via Docker on your localhost to try the following:
 $ make devel
 ```
 
+**TODO: This needs to be updated!**
 
 ```clj
 (require '[clojure.tools.logging :as log]

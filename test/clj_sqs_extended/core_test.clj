@@ -63,9 +63,10 @@
   (doseq [format [:transit :json]]
     (let [handler-chan (chan)]
       (fixtures/with-test-standard-queue
-        (fixtures/with-handle-queue-queue-opts-standard
+        (fixtures/with-handle-queue
           handler-chan
-          {:format format}
+          true
+          {:handler-opts {:format format}}
 
           (testing "handle-queue can send/receive basic message to standard queue"
             (is (string? (sqs-ext/send-message fixtures/aws-config
@@ -79,28 +80,52 @@
                                                @fixtures/test-queue-url
                                                test-message-large
                                                {:format format})))
-            (is (= test-message-large (<!! handler-chan)))))))))
+            (is (= test-message-large (<!! handler-chan))))))
+      (close! handler-chan))))
+
+(deftest handle-queue-sends-and-receives-messages-without-bucket
+  (testing "handle-queue can send/receive message without using a s3 bucket"
+    (let [handler-chan (chan)
+          aws-config-without-bucket (dissoc fixtures/aws-config
+                                            :s3-bucket-name)]
+      (fixtures/with-test-standard-queue
+        (fixtures/with-handle-queue
+          handler-chan
+          true
+          {:aws-config {:s3-bucket-name nil}}
+
+          (is (string? (sqs-ext/send-message aws-config-without-bucket
+                                             @fixtures/test-queue-url
+                                             (first test-messages-basic))))
+          (is (= (first test-messages-basic) (<!! handler-chan)))
+          (is (string? (sqs-ext/send-message aws-config-without-bucket
+                                             @fixtures/test-queue-url
+                                             test-message-with-time)))
+          (is (= test-message-with-time (<!! handler-chan)))))
+      (close! handler-chan))))
 
 (deftest handle-queue-sends-and-receives-timestamped-message
   (testing "handle-queue can send/receive message including timestamp to standard queue"
     (let [handler-chan (chan)]
       (fixtures/with-test-standard-queue
-        (fixtures/with-handle-queue-standard
+        (fixtures/with-handle-queue-defaults
           handler-chan
-
+          true
           (is (string? (sqs-ext/send-message fixtures/aws-config
                                              @fixtures/test-queue-url
                                              test-message-with-time)))
-          (is (= test-message-with-time (<!! handler-chan))))))))
+          (is (= test-message-with-time (<!! handler-chan)))))
+      (close! handler-chan))))
 
 (deftest handle-queue-sends-and-receives-fifo-messages
   (testing "handle-queue can send/receive basic messages to FIFO queue"
     (doseq [format [:transit :json]]
       (let [handler-chan (chan)]
         (fixtures/with-test-fifo-queue
-          (fixtures/with-handle-queue-queue-opts-fifo
+          (fixtures/with-handle-queue
             handler-chan
-            {:format format}
+            true
+            {:handler-opts {:format format}}
 
             (doseq [message test-messages-basic]
               (is (string? (sqs-ext/send-fifo-message fixtures/aws-config
@@ -110,18 +135,17 @@
                                                       {:format format}))))
             (doseq [message test-messages-basic]
               (let [received-message (<!! handler-chan)]
-                (is (= message received-message))))))))))
+                (is (= message received-message))))))
+        (close! handler-chan)))))
 
 (deftest handle-queue-terminates-with-non-existing-queue
   (testing "handle-queue terminates when non-existing queue is used"
-    (let [handler-chan (chan)]
-      (fixtures/with-test-standard-queue
-        (let [stats
-              (fixtures/with-handle-queue-queue-opts-standard
-                handler-chan
-                {:queue-url "https://non-existing-queue"})]
-
-          (is (contains? stats :stopped-at))))
+    (let [handler-chan (chan)
+          stats (fixtures/with-handle-queue
+                   handler-chan
+                   true
+                   {:handler-opts {:queue-url "https://non-existing-queue"}})]
+         (is (contains? stats :stopped-at))
       (close! handler-chan))))
 
 (deftest handle-queue-terminates-with-non-existing-bucket
@@ -129,9 +153,10 @@
     (let [handler-chan (chan)]
       (fixtures/with-test-standard-queue
         (let [stats
-              (fixtures/with-handle-queue-aws-opts-standard
+              (fixtures/with-handle-queue
                 handler-chan
-                {:s3-bucket-name "non-existing-bucket"})]
+                true
+                {:aws-config {:s3-bucket-name "non-existing-bucket"}})]
 
           (is (string? (sqs-ext/send-message fixtures/aws-config
                                              @fixtures/test-queue-url
@@ -151,10 +176,11 @@
                                        "Testing permanent network failure"))}
           #(let [restart-limit 3
                  restart-delay-seconds 1
-                 stop-fn (fixtures/with-handle-queue-queue-opts-standard-no-autostop
+                 stop-fn (fixtures/with-handle-queue
                            handler-chan
-                           {:restart-limit         restart-limit
-                            :restart-delay-seconds restart-delay-seconds})]
+                           false
+                           {:handler-opts {:restart-limit         restart-limit
+                                           :restart-delay-seconds restart-delay-seconds}})]
              (Thread/sleep (+ (* restart-limit (* restart-delay-seconds 1000)) 500))
              (let [stats (stop-fn)]
                (is (= (:restart-count stats) restart-limit))))))
@@ -178,9 +204,10 @@
                                               @fixtures/test-queue-url
                                               {})))}
           #(let [restart-delay-seconds 1
-                 stop-fn (fixtures/with-handle-queue-queue-opts-standard-no-autostop
+                 stop-fn (fixtures/with-handle-queue
                            handler-chan
-                           {:restart-delay-seconds restart-delay-seconds})]
+                           false
+                           {:handler-opts {:restart-delay-seconds restart-delay-seconds}})]
              ;; give the loop some time to handle that error ...
              (Thread/sleep (+ (* restart-delay-seconds 1000) 500))
 
@@ -205,8 +232,9 @@
         (with-redefs-fn {#'sqs/receive-message
                          (fn [_ _ _]
                            (RuntimeException. "Testing runtime error"))}
-          #(let [stats (fixtures/with-handle-queue-standard
-                         handler-chan)]
+          #(let [stats (fixtures/with-handle-queue-defaults
+                         handler-chan
+                         true)]
              (Thread/sleep 500)
              (is (= (:restart-count stats) 0))
              (is (contains? stats :stopped-at)))))
@@ -241,9 +269,10 @@
     (bond/with-spy [fixtures/test-handler-fn]
       (let [handler-chan (chan)]
         (fixtures/with-test-standard-queue
-          (fixtures/with-handle-queue-queue-opts-standard
+          (fixtures/with-handle-queue
             handler-chan
-            {:auto-delete false}
+            true
+            {:handler-opts {:auto-delete false}}
 
             (is (string? (sqs-ext/send-message fixtures/aws-config
                                                @fixtures/test-queue-url
@@ -260,15 +289,15 @@
                   (is (fn? (last test-handler-fn-args))))))))
         (close! handler-chan)))))
 
-
 (deftest done-fn-handle-absent-when-auto-delete-true
   (testing "done-fn handle is not present in response when auto-delete is true"
     (bond/with-spy [fixtures/test-handler-fn]
       (let [handler-chan (chan)]
         (fixtures/with-test-standard-queue
-          (fixtures/with-handle-queue-queue-opts-standard
+          (fixtures/with-handle-queue
             handler-chan
-            {:auto-delete true}
+            true
+            {:handler-opts {:auto-delete true}}
 
             (is (string? (sqs-ext/send-message fixtures/aws-config
                                                @fixtures/test-queue-url
@@ -281,7 +310,6 @@
               (let [test-handler-fn-args
                     (-> fixtures/test-handler-fn bond/calls first :args)]
                 (is (not (fn? (last test-handler-fn-args))))))))
-
         (close! handler-chan)))))
 
 (deftest recoverable-errors-get-judged-properly

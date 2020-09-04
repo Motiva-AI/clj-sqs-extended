@@ -22,10 +22,9 @@
         creds (aws/configure-credentials aws-config)
         s3-client (when (:s3-bucket-name aws-config)
                     (s3/s3-client aws-config))
-        sqs-config (if s3-client
-                     (-> (ExtendedClientConfiguration.)
-                         (.withPayloadSupportEnabled s3-client (:s3-bucket-name aws-config)))
-                     (ExtendedClientConfiguration.))
+        sqs-config (cond-> (ExtendedClientConfiguration.)
+                      s3-client (.withPayloadSupportEnabled s3-client
+                                                            (:s3-bucket-name aws-config)))
         builder (AmazonSQSClientBuilder/standard)
         builder (if endpoint (.withEndpointConfiguration builder endpoint) builder)
         builder (if creds (.withCredentials builder creds) builder)]

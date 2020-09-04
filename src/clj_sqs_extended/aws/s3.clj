@@ -24,9 +24,9 @@
                        (.withExpirationInDays expiration-days))]
     (.withRules (BucketLifecycleConfiguration.) [expiration])))
 
-(defn create-bucket
+(defn create-bucket!
   ([s3-client name]
-   (create-bucket s3-client name (configure-bucket-lifecycle "Enabled" 14)))
+   (create-bucket! s3-client name (configure-bucket-lifecycle "Enabled" 14)))
 
   ([s3-client name lifecycle]
    (doto s3-client
@@ -34,7 +34,7 @@
      (.setBucketLifecycleConfiguration name lifecycle))
    name))
 
-(defn purge-bucket
+(defn purge-bucket!
   [s3-client bucket-name]
   (letfn [(delete-objects [objects]
             (doseq [o objects]
