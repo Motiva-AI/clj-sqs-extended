@@ -141,13 +141,12 @@
                                        :restart-limit         restart-limit
                                        :restart-delay-seconds restart-delay-seconds
                                        :format                format})]
-    (log/infof (str "Handling queue '%s' with:\n"
-                    "  bucket: %s\n"
-                    "  number-of-handler-threads: %d\n"
-                    "  restart-limit: %d\n"
-                    "  restart-delay-seconds: %d\n"
-                    "  auto-delete: %s\n"
-                    "  format: %s")
+    (log/infof (str "Handling queue '%s' with bucket [%s], "
+                    "number-of-handler-threads [%d], "
+                    "restart-limit [%d], "
+                    "restart-delay-seconds [%d], "
+                    "auto-delete [%s], "
+                    "format [%s].")
                queue-url
                s3-bucket-name
                number-of-handler-threads
