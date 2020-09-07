@@ -114,11 +114,6 @@
            s3-bucket-name
            sqs-endpoint
            region]
-    :or   {access-key   "default"
-           secret-key   "default"
-           s3-endpoint  "http://localhost:4566"
-           sqs-endpoint "http://localhost:4566"
-           region       "us-east-2"}
     :as   sqs-ext-config}
    {:keys [queue-url
            number-of-handler-threads
