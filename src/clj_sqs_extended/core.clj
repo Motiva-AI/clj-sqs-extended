@@ -105,9 +105,16 @@
                        has been finished.
 
   Returns:
-    A stop function - Call this function to terminate the loop and receive some final
+    A stop function - Call this function to terminate the loop and receive a map of final
                       information about the finished handling process (hopefully handy for
-                      debugging)."
+                      debugging). That map includes:
+
+                      {:iteration                  The total count of iterations the loop was executed
+                       :restart-count 0            Number of times the loop was restarted
+                       :started-at    (t/now)      A tick instant timestamp when the loop was started
+                       :last-iteration-started-at  A tick instant timestamp when the loop began last
+                       :stopped-at                 A tick instant timestamp when the loop was stopped
+                       :loop-duration}             Total loop duration in seconds"
   [{:keys [access-key
            secret-key
            s3-endpoint

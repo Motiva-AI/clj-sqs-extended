@@ -37,7 +37,7 @@
   (let [now (t/now)]
     (-> loop-state
         (update-in [:stats :iteration] inc)
-        (assoc-in [:stats :this-pass-started-at] now)
+        (assoc-in [:stats :last-iteration-started-at] now)
         (assoc-in [:stats :loop-duration]
                   (secs-between (-> loop-state :stats :started-at)
                                 now)))))
