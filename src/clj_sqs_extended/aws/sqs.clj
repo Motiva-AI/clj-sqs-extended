@@ -36,19 +36,28 @@
 
   ([sqs-client name
     {:keys [fifo
+            visibility-timeout-in-seconds
             kms-master-key-id
             kms-data-key-reuse-period]}]
    (let [request (cond-> (CreateQueueRequest. name)
                    fifo
                    (doto (.addAttributesEntry
-                           "FifoQueue" "true"))
+                           "FifoQueue"
+                           "true"))
+
+                   visibility-timeout-in-seconds
+                   (doto (.addAttributesEntry
+                           "VisibilityTimeout"
+                           (str visibility-timeout-in-seconds)))
+
                    kms-master-key-id
-                   (.addAttributesEntry
-                     "KmsMasterKeyId" kms-master-key-id)
+                   (doto (.addAttributesEntry
+                           "KmsMasterKeyId" kms-master-key-id))
 
                    kms-data-key-reuse-period
-                   (.addAttributesEntry
-                     "KmsDataKeyReusePeriodSeconds" kms-data-key-reuse-period))]
+                   (doto (.addAttributesEntry
+                           "KmsDataKeyReusePeriodSeconds" kms-data-key-reuse-period)))]
+
      (->> (.createQueue sqs-client request)
           (.getQueueUrl)))))
 
@@ -58,7 +67,8 @@
 
   ([sqs-client
     queue-name
-    {:keys [kms-master-key-id
+    {:keys [visibility-timeout-in-seconds
+            kms-master-key-id
             kms-data-key-reuse-period]
      :as   opts}]
    (create-queue sqs-client queue-name opts)))
@@ -69,6 +79,7 @@
 
   ([sqs-client queue-name
     {:keys [fifo
+            visibility-timeout-in-seconds
             kms-master-key-id
             kms-data-key-reuse-period]
      :or   {fifo true}
