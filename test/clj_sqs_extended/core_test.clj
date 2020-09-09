@@ -1,6 +1,6 @@
 (ns clj-sqs-extended.core-test
   (:require [clojure.test :refer [use-fixtures deftest testing is are]]
-            [clojure.core.async :refer [chan close! <!!]]
+            [clojure.core.async :refer [chan close! timeout alt!! <!!]]
             [clojure.core.async.impl.protocols :refer [closed?]]
             [bond.james :as bond :refer [with-spy]]
             [clj-sqs-extended.aws.sqs :as sqs]
@@ -190,7 +190,7 @@
         ;;           an error once and afterwards do what the original function did,
         ;;           which we saved previously:
         (with-redefs-fn {#'sqs/receive-message
-                         (fn [sqs-client queue-url opts]
+                         (fn [_ _ _]
                            (swap! called-counter inc)
                            (if (= @called-counter 1)
                              (HttpTimeoutException. "Testing temporary network failure")
@@ -248,8 +248,10 @@
                                              (first test-messages-basic)
                                              {:format format})))
           (is (= (first test-messages-basic) (:body (<!! out-chan))))
+
           ;; terminate receive loop and thereby close the out-channel
           (stop-fn)
+
           (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
                                              @fixtures/test-queue-url
                                              (last test-messages-basic)
@@ -257,8 +259,8 @@
           (is (clojure.core.async.impl.protocols/closed? out-chan))
           (is (nil? (<!! out-chan))))))))
 
-(deftest done-fn-handle-present-when-auto-delete-false
-  (testing "done-fn handle is present in response when auto-delete is false"
+(deftest manually-deleted-messages-dont-get-resent
+  (testing "Messages deleted by invoking the done-fn handle are not resent"
     (bond/with-spy [fixtures/test-handler-fn]
       (let [handler-chan (chan)]
         (fixtures/with-test-standard-queue
@@ -269,16 +271,60 @@
             (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
                                                @fixtures/test-queue-url
                                                (last test-messages-basic))))
+
             (let [received-message (<!! handler-chan)]
+              ;; message received properly
               (is (= (last test-messages-basic) received-message))
 
-              (let [received-message (<!! handler-chan)]
-                (is (= (last test-messages-basic) received-message))
+              ;; delete function handle is returned as last argument ...
+              (let [test-handler-fn-args
+                    (-> fixtures/test-handler-fn bond/calls first :args)]
+                (is (fn? (last test-handler-fn-args))))
 
-                ;; delete function handle is returned as last argument ...
-                (let [test-handler-fn-args
-                      (-> fixtures/test-handler-fn bond/calls first :args)]
-                  (is (fn? (last test-handler-fn-args))))))))
+              ;; delete it manually now ...
+              (@fixtures/test-handler-done-fn)
+
+              ;; verify its not received again ...
+              (is (alt!!
+                    handler-chan false
+                    (timeout 1000) true)))))
+
+        (close! handler-chan)))))
+
+(deftest messages-get-resent-if-not-deleted-manually-and-auto-delete-is-false
+  (testing "Messages get resent if the done-fn is not invoked upon receival and auto-delete is false"
+    (bond/with-spy [fixtures/test-handler-fn]
+      (let [handler-chan (chan)
+            visibility-timeout 1]
+        (fixtures/with-test-standard-queue-opts
+          {:visibility-timeout-in-seconds visibility-timeout}
+
+          (fixtures/with-handle-queue
+            handler-chan
+            {:handler-opts {:auto-delete false}}
+
+            (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
+                                               @fixtures/test-queue-url
+                                               (last test-messages-basic))))
+
+            (let [received-message (<!! handler-chan)]
+              ;; message received properly
+              (is (= (last test-messages-basic) received-message))
+
+              ;; delete function handle is returned as last argument ...
+              (let [test-handler-fn-args
+                    (-> fixtures/test-handler-fn bond/calls first :args)]
+                (is (fn? (last test-handler-fn-args))))
+
+              ;; nothing comes out of the channel within the visibility timeout ...
+              (is (alt!!
+                    handler-chan false
+                    (timeout (- (* 1000 visibility-timeout) 100)) true))
+
+              ;; but afterwards ...
+              (Thread/sleep 200)
+              (is (= (last test-messages-basic) (<!! handler-chan))))))
+
         (close! handler-chan)))))
 
 (deftest done-fn-handle-absent-when-auto-delete-true
@@ -301,6 +347,11 @@
               (let [test-handler-fn-args
                     (-> fixtures/test-handler-fn bond/calls first :args)]
                 (is (not (fn? (last test-handler-fn-args))))))))
+
+              ;; TODO: As improvement it would be great to verify that the message
+              ;;       is really gone, but we don't have the receipt handle available
+              ;;       in this setup
+
         (close! handler-chan)))))
 
 (deftest recoverable-errors-get-judged-properly

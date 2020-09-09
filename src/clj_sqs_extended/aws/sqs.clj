@@ -30,27 +30,37 @@
         builder (if creds (.withCredentials builder creds) builder)]
     (AmazonSQSExtendedClient. (.build builder) sqs-config)))
 
+(defn build-create-queue-request-with-attributes
+  [name
+   {:keys [fifo
+           visibility-timeout-in-seconds
+           kms-master-key-id
+           kms-data-key-reuse-period]}]
+  (cond-> (CreateQueueRequest. name)
+    fifo
+    (.addAttributesEntry "FifoQueue"
+                         "true")
+
+    visibility-timeout-in-seconds
+    (.addAttributesEntry "VisibilityTimeout"
+                         (str visibility-timeout-in-seconds))
+
+    kms-master-key-id
+    (.addAttributesEntry "KmsMasterKeyId"
+                         (str kms-master-key-id))
+
+    kms-data-key-reuse-period
+    (.addAttributesEntry "KmsDataKeyReusePeriodSeconds"
+                         (str kms-data-key-reuse-period))))
+
 (defn- create-queue
   ([sqs-client name]
    (create-queue sqs-client name {}))
 
-  ([sqs-client name
-    {:keys [fifo
-            kms-master-key-id
-            kms-data-key-reuse-period]}]
-   (let [request (cond-> (CreateQueueRequest. name)
-                   fifo
-                   (doto (.addAttributesEntry
-                           "FifoQueue" "true"))
-                   kms-master-key-id
-                   (.addAttributesEntry
-                     "KmsMasterKeyId" kms-master-key-id)
-
-                   kms-data-key-reuse-period
-                   (.addAttributesEntry
-                     "KmsDataKeyReusePeriodSeconds" kms-data-key-reuse-period))]
-     (->> (.createQueue sqs-client request)
-          (.getQueueUrl)))))
+  ([sqs-client name attributes]
+   (->> (build-create-queue-request-with-attributes name attributes)
+        (.createQueue sqs-client)
+        (.getQueueUrl))))
 
 (defn create-standard-queue!
   ([sqs-client queue-name]
@@ -58,22 +68,22 @@
 
   ([sqs-client
     queue-name
-    {:keys [kms-master-key-id
+    {:keys [visibility-timeout-in-seconds
+            kms-master-key-id
             kms-data-key-reuse-period]
      :as   opts}]
    (create-queue sqs-client queue-name opts)))
 
 (defn create-fifo-queue!
   ([sqs-client queue-name]
-   (create-queue sqs-client queue-name {:fifo true}))
+   (create-queue sqs-client queue-name {}))
 
   ([sqs-client queue-name
-    {:keys [fifo
+    {:keys [visibility-timeout-in-seconds
             kms-master-key-id
             kms-data-key-reuse-period]
-     :or   {fifo true}
      :as   opts}]
-   (create-queue sqs-client queue-name opts)))
+   (create-queue sqs-client queue-name (assoc opts :fifo true))))
 
 (defn delete-queue!
   [sqs-client queue-url]

@@ -18,6 +18,7 @@
 (defonce test-queue-url (atom nil))
 (defonce test-standard-queue-name (helpers/random-queue-name))
 (defonce test-fifo-queue-name (helpers/random-queue-name {:suffix ".fifo"}))
+(defonce test-handler-done-fn (atom nil))
 
 (defn with-test-sqs-ext-client
   [f]
@@ -33,10 +34,11 @@
   (f))
 
 (defn wrap-standard-queue
-  [f]
+  [opts f]
   (reset! test-queue-url
           (sqs-ext/create-standard-queue! sqs-ext-config
-                                          test-standard-queue-name))
+                                          test-standard-queue-name
+                                          opts))
   (f)
   ;; TODO: https://github.com/Motiva-AI/clj-sqs-extended/issues/27
   (Thread/sleep 500)
@@ -45,7 +47,13 @@
 
 (defmacro with-test-standard-queue
   [& body]
-  `(wrap-standard-queue (fn [] ~@body)))
+  `(wrap-standard-queue {}
+                        (fn [] ~@body)))
+
+(defmacro with-test-standard-queue-opts
+  [opts & body]
+  `(wrap-standard-queue ~opts
+                        (fn [] ~@body)))
 
 (defn wrap-fifo-queue
   [f]
@@ -65,8 +73,8 @@
 (defn test-handler-fn
   ([chan message]
    (>!! chan message))
-  ([chan message _]
-   ;; WATCHOUT: Second parameter (done-fn) is not used here.
+  ([chan message done-fn]
+   (reset! test-handler-done-fn done-fn)
    (>!! chan message)))
 
 (defn wrap-handle-queue
