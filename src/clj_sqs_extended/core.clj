@@ -1,58 +1,21 @@
 (ns clj-sqs-extended.core
   (:require [clojure.core.async :refer [chan <!! thread]]
             [clojure.tools.logging :as log]
+            [clj-sqs-extended.internal.core :refer [provide-with-auto-client-from-config]]
             [clj-sqs-extended.internal.receive :as receive]
             [clj-sqs-extended.aws.sqs :as sqs]))
 
 
 ;; Conveniance declarations
-(defn create-standard-queue!
-  [sqs-ext-config & args]
-  (apply sqs/create-standard-queue!
-         (sqs/sqs-ext-client sqs-ext-config)
-         args))
+(provide-with-auto-client-from-config create-standard-queue! sqs/create-standard-queue!)
+(provide-with-auto-client-from-config create-fifo-queue!     sqs/create-fifo-queue!)
+(provide-with-auto-client-from-config purge-queue!           sqs/purge-queue!)
+(provide-with-auto-client-from-config delete-queue!          sqs/delete-queue!)
+(provide-with-auto-client-from-config send-message           sqs/send-message)
+(provide-with-auto-client-from-config send-fifo-message      sqs/send-fifo-message)
+(provide-with-auto-client-from-config delete-message!        sqs/delete-message!)
 
-(defn create-fifo-queue!
-  [sqs-ext-config & args]
-  (apply sqs/create-fifo-queue!
-         (sqs/sqs-ext-client sqs-ext-config)
-         args))
-
-(defn purge-queue!
-  [sqs-ext-config & args]
-  (apply sqs/purge-queue!
-         (sqs/sqs-ext-client sqs-ext-config)
-         args))
-
-(defn delete-queue!
-  [sqs-ext-config & args]
-  (apply sqs/delete-queue!
-         (sqs/sqs-ext-client sqs-ext-config)
-         args))
-
-(defn send-message
-  [sqs-ext-config & args]
-  (apply sqs/send-message
-         (sqs/sqs-ext-client sqs-ext-config)
-         args))
-
-(defn send-fifo-message
-  [sqs-ext-config & args]
-  (apply sqs/send-fifo-message
-         (sqs/sqs-ext-client sqs-ext-config)
-         args))
-
-(defn delete-message!
-  [sqs-ext-config & args]
-  (apply sqs/delete-message!
-         (sqs/sqs-ext-client sqs-ext-config)
-         args))
-
-(defn receive-loop
-  [sqs-ext-config & args]
-  (apply receive/receive-loop
-         (sqs/sqs-ext-client sqs-ext-config)
-         args))
+(provide-with-auto-client-from-config receive-loop receive/receive-loop)
 
 (defn- launch-handler-threads
   [number-of-handler-threads receive-chan auto-delete handler-fn]
