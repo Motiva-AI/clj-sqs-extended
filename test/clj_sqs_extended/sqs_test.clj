@@ -16,11 +16,9 @@
 (deftest can-receive-message-when-idle
   (testing "Receive empty response when no message has been send before"
     (fixtures/with-test-standard-queue
-      (doseq [format [:transit :json]]
-        (let [response (sqs/receive-message @fixtures/test-sqs-ext-client
-                                            @fixtures/test-queue-url
-                                            {:format format})]
-          (is (empty? response)))))))
+      (let [response (sqs/receive-message @fixtures/test-sqs-ext-client
+                                          @fixtures/test-queue-url)]
+        (is (empty? response))))))
 
 (deftest can-receive-message
   (testing "Sending/Receiving basic maps"
@@ -32,8 +30,7 @@
                                        @fixtures/test-queue-url
                                        test-message {:format format}))
           (let [response (sqs/receive-message @fixtures/test-sqs-ext-client
-                                              @fixtures/test-queue-url
-                                              {:format format})]
+                                              @fixtures/test-queue-url)]
             (is (= test-message (:body response)))))))))
 
 (deftest can-receive-fifo-messages
@@ -48,8 +45,7 @@
                                  {:format format}))
         (doseq [test-message test-messages]
           (let [response (sqs/receive-message @fixtures/test-sqs-ext-client
-                                              @fixtures/test-queue-url
-                                              {:format format})]
+                                              @fixtures/test-queue-url)]
             (is (= test-message (:body response)))))))))
 
 (deftest can-send-message-larger-than-256kb

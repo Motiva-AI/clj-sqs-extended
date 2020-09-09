@@ -3,6 +3,7 @@
             [clojure.core.async.impl.protocols :as async-protocols]
             [clj-sqs-extended.aws.configuration :as aws]
             [clj-sqs-extended.aws.s3 :as s3]
+            [clojure.tools.logging :as log]
             [clj-sqs-extended.internal.serdes :as serdes])
   (:import [com.amazon.sqs.javamessaging
             AmazonSQSExtendedClient
@@ -11,10 +12,13 @@
            [com.amazonaws.services.sqs.model
             CreateQueueRequest
             DeleteMessageRequest
+            MessageAttributeValue
             PurgeQueueRequest
             ReceiveMessageRequest
             SendMessageRequest]))
 
+
+(def ^:private clj-sqs-ext-format-attribute "serialized-with")
 
 (defn sqs-ext-client
   [sqs-ext-config]
@@ -111,10 +115,16 @@
   ([sqs-client queue-url message
     {:keys [format]
      :or   {format :transit}}]
-   (->> (serdes/serialize message format)
-        (SendMessageRequest. queue-url)
-        (.sendMessage sqs-client)
-        (.getMessageId))))
+   (let [request (->> (serdes/serialize message format)
+                      (SendMessageRequest. queue-url))
+         message-attribute-format (doto (MessageAttributeValue.)
+                                        (.withDataType "String")
+                                        (.withStringValue (str (name format))))]
+     (doto request (.addMessageAttributesEntry clj-sqs-ext-format-attribute
+                                               message-attribute-format))
+     (->> request
+          (.sendMessage sqs-client)
+          (.getMessageId)))))
 
 (defn send-fifo-message
   "Send a message to a FIFO queue.
@@ -139,9 +149,14 @@
             deduplication-id]
      :or   {format :transit}}]
    (let [request (->> (serdes/serialize message format)
-                      (SendMessageRequest. queue-url))]
+                      (SendMessageRequest. queue-url))
+         message-attribute-format (doto (MessageAttributeValue.)
+                                        (.withDataType "String")
+                                        (.withStringValue (str (name format))))]
      ;; group ID is mandatory when sending fifo messages
-     (doto request (.setMessageGroupId (str group-id)))
+     (doto request (.setMessageGroupId (str group-id))
+                   (.addMessageAttributesEntry clj-sqs-ext-format-attribute
+                                               message-attribute-format))
      (when deduplication-id
        ;; Refer to https://docs.aws.amazon.com/AWSJavaSDK/latest/javadoc/com/amazonaws/services/sqs/model/SendMessageRequest.html#setMessageDeduplicationId-java.lang.String-
        (doto request (.setMessageDeduplicationId deduplication-id)))
@@ -159,11 +174,15 @@
    (receive-message sqs-client queue-url {}))
 
   ([sqs-client queue-url
-    {:keys [format
-            wait-time]
-     :or   {format    :transit
-            wait-time 0}}]
-   (letfn [(extract-relevant-keys [message]
+    {:keys [wait-time]
+     :or   {wait-time 0}}]
+   (letfn [(get-format-attribute [message]
+                                 (when message
+                                   (let [attributes (.getMessageAttributes message)
+                                         format (get attributes clj-sqs-ext-format-attribute)]
+                                     (keyword (.getStringValue format)))))
+
+           (extract-relevant-keys [message]
              (if message
                (-> (bean message)
                    (select-keys [:messageId :receiptHandle :body]))
@@ -171,9 +190,12 @@
      (let [request (doto (ReceiveMessageRequest. queue-url)
                      (.setWaitTimeSeconds (int wait-time))
                      ;; WATCHOUT: This is a design choice to read one message at a time from the queue
-                     (.setMaxNumberOfMessages (int 1)))
+                     (.setMaxNumberOfMessages (int 1))
+                     (.setAttributeNames ["All"]))
            response (.receiveMessage sqs-client request)
-           message (->> (.getMessages response) (first) (extract-relevant-keys))]
+           sqs-message (first (.getMessages response))
+           message (extract-relevant-keys sqs-message)
+           format (get-format-attribute sqs-message)]
        (if-let [payload (serdes/deserialize (:body message) format)]
          (assoc message :body payload)
          message)))))
@@ -207,10 +229,8 @@
    (receive-message-channeled sqs-client queue-url {}))
 
   ([sqs-client queue-url
-    {:keys [num-consumers
-            format]
-     :or   {num-consumers 1
-            format        :transit}
+    {:keys [num-consumers]
+     :or   {num-consumers 1}
      :as   opts}]
    (if (= num-consumers 1)
      (receive-to-channel sqs-client queue-url opts)
