@@ -63,6 +63,7 @@
         (.getQueueUrl))))
 
 (defn create-standard-queue!
+  "Creates a standard queue."
   ([sqs-client queue-name]
    (create-queue sqs-client queue-name {}))
 
