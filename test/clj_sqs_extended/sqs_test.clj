@@ -61,3 +61,20 @@
       (let [response (sqs/receive-message @fixtures/test-sqs-ext-client
                                           @fixtures/test-queue-url)]
         (is (= test-message-larger-than-256kb (:body response)))))))
+
+(deftest create-queue-request-attributes-attached-correctly
+  (testing "Creating a queue create request with single attributes works as expected"
+    (let [test-request (sqs/build-create-queue-request-with-attributes
+                          "test-queue-name"
+                          {:fifo "true"})]
+     (is (= (.getAttributes test-request) {"FifoQueue" "true"}))))
+
+  (testing "Creating a queue create request with multiple attributes works as expected"
+    (let [test-request (sqs/build-create-queue-request-with-attributes
+                          "test-queue-name"
+                          {:kms-master-key-id         "UnbreakableMasterKey"
+                           :kms-data-key-reuse-period "60"})]
+
+     (is (= (.getAttributes test-request)
+            {"KmsMasterKeyId"               "UnbreakableMasterKey"
+             "KmsDataKeyReusePeriodSeconds" "60"})))))
