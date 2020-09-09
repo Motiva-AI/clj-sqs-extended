@@ -3,7 +3,6 @@
             [clojure.core.async.impl.protocols :as async-protocols]
             [clj-sqs-extended.aws.configuration :as aws]
             [clj-sqs-extended.aws.s3 :as s3]
-            [clojure.tools.logging :as log]
             [clj-sqs-extended.internal.serdes :as serdes])
   (:import [com.amazon.sqs.javamessaging
             AmazonSQSExtendedClient
@@ -18,7 +17,7 @@
             SendMessageRequest]))
 
 
-(def ^:private clj-sqs-ext-format-attribute "serialized-with")
+(def ^:private clj-sqs-ext-format-attribute "SerdesFormat")
 
 (defn sqs-ext-client
   [sqs-ext-config]
@@ -107,8 +106,8 @@
     message    - The actual message/data to be sent
 
   Options:
-    format     - The format (currently :json or :transit) to serialize outgoing
-                 messages with (optional, default: :transit)"
+    format     - The format (currently :json or :transit) to serialize the outgoing
+                 message with (optional, default: :transit)"
   ([sqs-client queue-url message]
    (send-message sqs-client queue-url message {}))
 
@@ -138,8 +137,8 @@
                        to the same group are guaranteed FIFO
 
   Options:
-    format           - The format (currently :json or :transit) to serialize outgoing
-                       messages with (optional, default: :transit)
+    format           - The format (currently :json or :transit) to serialize the outgoing
+                       message with (optional, default: :transit)
     deduplication-id - A string used for deduplication of sent messages"
   ([sqs-client queue-url message group-id]
    (send-fifo-message sqs-client queue-url message group-id {}))
@@ -153,7 +152,7 @@
          message-attribute-format (doto (MessageAttributeValue.)
                                         (.withDataType "String")
                                         (.withStringValue (str (name format))))]
-     ;; group ID is mandatory when sending fifo messages
+     ;; WATCHOUT: group ID is mandatory when sending fifo messages
      (doto request (.setMessageGroupId (str group-id))
                    (.addMessageAttributesEntry clj-sqs-ext-format-attribute
                                                message-attribute-format))
@@ -169,6 +168,20 @@
   (->> (DeleteMessageRequest. queue-url (:receiptHandle message))
        (.deleteMessage sqs-client)))
 
+(defn- get-serdes-format-attribute
+  [message]
+  (when message
+    (let [attributes (.getMessageAttributes message)
+          format (get attributes clj-sqs-ext-format-attribute)]
+      (keyword (.getStringValue format)))))
+
+(defn- extract-relevant-keys
+  [message]
+  (if message
+    (-> (bean message)
+        (select-keys [:messageId :receiptHandle :body]))
+    {}))
+
 (defn receive-message
   ([sqs-client queue-url]
    (receive-message sqs-client queue-url {}))
@@ -176,29 +189,19 @@
   ([sqs-client queue-url
     {:keys [wait-time]
      :or   {wait-time 0}}]
-   (letfn [(get-format-attribute [message]
-                                 (when message
-                                   (let [attributes (.getMessageAttributes message)
-                                         format (get attributes clj-sqs-ext-format-attribute)]
-                                     (keyword (.getStringValue format)))))
-
-           (extract-relevant-keys [message]
-             (if message
-               (-> (bean message)
-                   (select-keys [:messageId :receiptHandle :body]))
-               {}))]
-     (let [request (doto (ReceiveMessageRequest. queue-url)
-                     (.setWaitTimeSeconds (int wait-time))
-                     ;; WATCHOUT: This is a design choice to read one message at a time from the queue
-                     (.setMaxNumberOfMessages (int 1))
-                     (.setAttributeNames ["All"]))
-           response (.receiveMessage sqs-client request)
-           sqs-message (first (.getMessages response))
-           message (extract-relevant-keys sqs-message)
-           format (get-format-attribute sqs-message)]
-       (if-let [payload (serdes/deserialize (:body message) format)]
-         (assoc message :body payload)
-         message)))))
+   (let [request (doto (ReceiveMessageRequest. queue-url)
+                   (.setWaitTimeSeconds (int wait-time))
+                   ;; WATCHOUT: Without the next line our custom SerdesFormat attribute will not be received!
+                   (.setAttributeNames ["All"])
+                   ;; WATCHOUT: The next line is a design choice to read one message at a time from the queue
+                   (.setMaxNumberOfMessages (int 1)))
+         response (.receiveMessage sqs-client request)
+         sqs-message (first (.getMessages response))
+         message (extract-relevant-keys sqs-message)]
+     (if-let [payload (->> (get-serdes-format-attribute sqs-message)
+                           (serdes/deserialize (:body message)))]
+       (assoc message :body payload)
+       message))))
 
 (defn- receive-to-channel
   [sqs-client queue-url opts]

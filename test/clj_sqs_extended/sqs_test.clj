@@ -69,7 +69,7 @@
     (let [test-request (sqs/build-create-queue-request-with-attributes
                           "test-queue-name"
                           {:kms-master-key-id         "UnbreakableMasterKey"
-                           :kms-data-key-reuse-period "60"})]
+                           :kms-data-key-reuse-period 60})]
 
      (is (= (.getAttributes test-request)
             {"KmsMasterKeyId"               "UnbreakableMasterKey"
