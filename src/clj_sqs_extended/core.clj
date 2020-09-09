@@ -1,20 +1,21 @@
 (ns clj-sqs-extended.core
   (:require [clojure.core.async :refer [chan <!! thread]]
             [clojure.tools.logging :as log]
+            [clj-sqs-extended.internal.core :refer [provide-with-auto-client-from-config]]
             [clj-sqs-extended.internal.receive :as receive]
             [clj-sqs-extended.aws.sqs :as sqs]))
 
 
 ;; Conveniance declarations
-(sqs/macro-name-tbd create-standard-queue! sqs/create-standard-queue!)
-(sqs/macro-name-tbd create-fifo-queue!     sqs/create-fifo-queue!)
-(sqs/macro-name-tbd purge-queue!           sqs/purge-queue!)
-(sqs/macro-name-tbd delete-queue!          sqs/delete-queue!)
-(sqs/macro-name-tbd send-message           sqs/send-message)
-(sqs/macro-name-tbd send-fifo-message      sqs/send-fifo-message)
-(sqs/macro-name-tbd delete-message!        sqs/delete-message!)
+(provide-with-auto-client-from-config create-standard-queue! sqs/create-standard-queue!)
+(provide-with-auto-client-from-config create-fifo-queue!     sqs/create-fifo-queue!)
+(provide-with-auto-client-from-config purge-queue!           sqs/purge-queue!)
+(provide-with-auto-client-from-config delete-queue!          sqs/delete-queue!)
+(provide-with-auto-client-from-config send-message           sqs/send-message)
+(provide-with-auto-client-from-config send-fifo-message      sqs/send-fifo-message)
+(provide-with-auto-client-from-config delete-message!        sqs/delete-message!)
 
-(sqs/macro-name-tbd receive-loop receive/receive-loop)
+(provide-with-auto-client-from-config receive-loop receive/receive-loop)
 
 (defn- launch-handler-threads
   [number-of-handler-threads receive-chan auto-delete handler-fn]
