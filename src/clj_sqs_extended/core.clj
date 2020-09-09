@@ -6,53 +6,15 @@
 
 
 ;; Conveniance declarations
-(defn create-standard-queue!
-  [sqs-ext-config & args]
-  (apply sqs/create-standard-queue!
-         (sqs/sqs-ext-client sqs-ext-config)
-         args))
+(sqs/macro-name-tbd create-standard-queue! sqs/create-standard-queue!)
+(sqs/macro-name-tbd create-fifo-queue!     sqs/create-fifo-queue!)
+(sqs/macro-name-tbd purge-queue!           sqs/purge-queue!)
+(sqs/macro-name-tbd delete-queue!          sqs/delete-queue!)
+(sqs/macro-name-tbd send-message           sqs/send-message)
+(sqs/macro-name-tbd send-fifo-message      sqs/send-fifo-message)
+(sqs/macro-name-tbd delete-message!        sqs/delete-message!)
 
-(defn create-fifo-queue!
-  [sqs-ext-config & args]
-  (apply sqs/create-fifo-queue!
-         (sqs/sqs-ext-client sqs-ext-config)
-         args))
-
-(defn purge-queue!
-  [sqs-ext-config & args]
-  (apply sqs/purge-queue!
-         (sqs/sqs-ext-client sqs-ext-config)
-         args))
-
-(defn delete-queue!
-  [sqs-ext-config & args]
-  (apply sqs/delete-queue!
-         (sqs/sqs-ext-client sqs-ext-config)
-         args))
-
-(defn send-message
-  [sqs-ext-config & args]
-  (apply sqs/send-message
-         (sqs/sqs-ext-client sqs-ext-config)
-         args))
-
-(defn send-fifo-message
-  [sqs-ext-config & args]
-  (apply sqs/send-fifo-message
-         (sqs/sqs-ext-client sqs-ext-config)
-         args))
-
-(defn delete-message!
-  [sqs-ext-config & args]
-  (apply sqs/delete-message!
-         (sqs/sqs-ext-client sqs-ext-config)
-         args))
-
-(defn receive-loop
-  [sqs-ext-config & args]
-  (apply receive/receive-loop
-         (sqs/sqs-ext-client sqs-ext-config)
-         args))
+(sqs/macro-name-tbd receive-loop receive/receive-loop)
 
 (defn- launch-handler-threads
   [number-of-handler-threads receive-chan auto-delete handler-fn]
