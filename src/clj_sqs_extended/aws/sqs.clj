@@ -57,12 +57,7 @@
   ([sqs-client name]
    (create-queue sqs-client name {}))
 
-  ([sqs-client name
-    {:keys [fifo
-            visibility-timeout-in-seconds
-            kms-master-key-id
-            kms-data-key-reuse-period]
-     :as   attributes}]
+  ([sqs-client name attributes]
    (->> (build-create-queue-request-with-attributes name attributes)
         (.createQueue sqs-client)
         (.getQueueUrl))))
@@ -81,16 +76,14 @@
 
 (defn create-fifo-queue!
   ([sqs-client queue-name]
-   (create-queue sqs-client queue-name {:fifo true}))
+   (create-queue sqs-client queue-name {}))
 
   ([sqs-client queue-name
-    {:keys [fifo
-            visibility-timeout-in-seconds
+    {:keys [visibility-timeout-in-seconds
             kms-master-key-id
             kms-data-key-reuse-period]
-     :or   {fifo true}
      :as   opts}]
-   (create-queue sqs-client queue-name opts)))
+   (create-queue sqs-client queue-name (assoc opts :fifo true))))
 
 (defn delete-queue!
   [sqs-client queue-url]
