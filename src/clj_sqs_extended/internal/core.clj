@@ -1,7 +1,7 @@
 (ns clj-sqs-extended.internal.core)
 
 
-(defmacro macro-name-tbd
+(defmacro provide-with-auto-client-from-config
   [fn-name sqs-fn]
   `(let [meta# (meta (var ~sqs-fn))]
      (def ~fn-name
