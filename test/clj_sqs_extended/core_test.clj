@@ -1,6 +1,6 @@
 (ns clj-sqs-extended.core-test
   (:require [clojure.test :refer [use-fixtures deftest testing is are]]
-            [clojure.core.async :refer [chan close! timeout alt!! <!!]]
+            [clojure.core.async :refer [chan close! timeout alt!! <!! thread]]
             [clojure.core.async.impl.protocols :refer [closed?]]
             [bond.james :as bond :refer [with-spy]]
             [clj-sqs-extended.aws.sqs :as sqs]
@@ -11,6 +11,7 @@
   (:import [com.amazonaws
             AmazonServiceException
             SdkClientException]
+           [com.amazonaws.services.sqs.model AmazonSQSException]
            [java.net.http HttpTimeoutException]
            [java.net
             SocketException
@@ -327,30 +328,57 @@
 
         (close! handler-chan)))))
 
+;; WATCHOUT: This is the original function from the core, but it
+;;           passes the entire SQS message into the channel so
+;;           that the receipt handle is accessible in the next test.
+(defn- launch-handler-threads-with-complete-sqs-message-forwarding
+  [number-of-handler-threads receive-chan auto-delete handler-fn]
+  (dotimes [_ number-of-handler-threads]
+    (thread
+      (loop []
+        (when-let [message (<!! receive-chan)]
+          (try
+            (if auto-delete
+              (handler-fn message)
+              (handler-fn message (:done-fn message)))
+            (catch Throwable _
+              (println "Handler function threw an error!")))
+          (recur))))))
+
 (deftest done-fn-handle-absent-when-auto-delete-true
   (testing "done-fn handle is not present in response when auto-delete is true"
     (bond/with-spy [fixtures/test-handler-fn]
       (let [handler-chan (chan)]
         (fixtures/with-test-standard-queue
-          (fixtures/with-handle-queue
-            handler-chan
-            {:handler-opts {:auto-delete true}}
+          (with-redefs-fn {#'sqs-ext/launch-handler-threads
+                           launch-handler-threads-with-complete-sqs-message-forwarding}
+            #(fixtures/with-handle-queue
+               handler-chan
+               {:handler-opts {:auto-delete true}}
 
-            (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
+               (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
+                                                  @fixtures/test-queue-url
+                                                  (first test-messages-basic))))
+
+               (let [received-message (<!! handler-chan)]
+                 (is (= (first test-messages-basic) (:body received-message)))
+
+                 ;; no delete function handle has been passed as last argument ...
+                 (let [test-handler-fn-args
+                       (-> fixtures/test-handler-fn bond/calls first :args)]
+                   (is (not (fn? (last test-handler-fn-args)))))
+
+                 ;; WATCHOUT: With the handler thread redeffed we can now access
+                 ;;           the receipt handle of the SQS message and try to
+                 ;;           delete the message manually. If the message was
+                 ;;           auto-deleted by the core API before this should
+                 ;;           yield an AmazonSQSException:
+                 (is (thrown-with-msg?
+                      AmazonSQSException
+                      #"^.*Service: AmazonSQS; Status Code: 400;.*$"
+                      (sqs-ext/delete-message! fixtures/sqs-ext-config
                                                @fixtures/test-queue-url
-                                               (first test-messages-basic))))
-
-            (let [received-message (<!! handler-chan)]
-              (is (= (first test-messages-basic) received-message))
-
-              ;; no delete function handle has been passed as last argument ...
-              (let [test-handler-fn-args
-                    (-> fixtures/test-handler-fn bond/calls first :args)]
-                (is (not (fn? (last test-handler-fn-args))))))))
-
-              ;; TODO: As improvement it would be great to verify that the message
-              ;;       is really gone, but we don't have the receipt handle available
-              ;;       in this setup
+                                               received-message)))))))
 
         (close! handler-chan)))))
 
