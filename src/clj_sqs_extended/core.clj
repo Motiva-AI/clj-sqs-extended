@@ -58,8 +58,6 @@
                                   false: will provide a `done-fn` key inside the returned messages and
                                          the message will be left untouched by this API
                                   (optional, defaults: true)
-      format                    - The format (currently :json or :transit) to serialize outgoing messages
-                                  with (optional, default: :transit)
 
     handler-fn - A function to which new incoming messages will be passed to (required)
 
@@ -89,13 +87,11 @@
            number-of-handler-threads
            restart-limit
            restart-delay-seconds
-           auto-delete
-           format]
+           auto-delete]
     :or   {number-of-handler-threads 4
            restart-limit             6
            restart-delay-seconds     10
-           auto-delete               true
-           format                    :transit}}
+           auto-delete               true}}
    handler-fn]
   (let [sqs-ext-client (sqs/sqs-ext-client sqs-ext-config)
         receive-chan (chan)
@@ -104,21 +100,18 @@
                                       receive-chan
                                       {:auto-delete           auto-delete
                                        :restart-limit         restart-limit
-                                       :restart-delay-seconds restart-delay-seconds
-                                       :format                format})]
+                                       :restart-delay-seconds restart-delay-seconds})]
     (log/infof (str "Handling queue '%s' with bucket [%s], "
                     "number-of-handler-threads [%d], "
                     "restart-limit [%d], "
                     "restart-delay-seconds [%d], "
-                    "auto-delete [%s], "
-                    "format [%s].")
+                    "auto-delete [%s].")
                queue-url
                s3-bucket-name
                number-of-handler-threads
                restart-limit
                restart-delay-seconds
-               auto-delete
-               format)
+               auto-delete)
     (launch-handler-threads number-of-handler-threads
                             receive-chan
                             auto-delete

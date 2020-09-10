@@ -85,6 +85,7 @@
                        (format "receive-loop for queue '%s' failed."
                                (:queue-url @loop-state))
                        {:reason (.getMessage error)})))]
+                        
       (cond
         (and (error-might-be-recovered-by-restarting? error)
              (restart-limit-not-reached? loop-state restart-limit))

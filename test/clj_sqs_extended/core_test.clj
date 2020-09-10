@@ -64,9 +64,8 @@
   (doseq [format [:transit :json]]
     (let [handler-chan (chan)]
       (fixtures/with-test-standard-queue
-        (fixtures/with-handle-queue
+        (fixtures/with-handle-queue-defaults
           handler-chan
-          {:handler-opts {:format format}}
 
           (testing "handle-queue can send/receive basic message to standard queue"
             (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
@@ -109,6 +108,7 @@
       (fixtures/with-test-standard-queue
         (fixtures/with-handle-queue-defaults
           handler-chan
+
           (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
                                              @fixtures/test-queue-url
                                              test-message-with-time)))
@@ -120,9 +120,8 @@
     (doseq [format [:transit :json]]
       (let [handler-chan (chan)]
         (fixtures/with-test-fifo-queue
-          (fixtures/with-handle-queue
+          (fixtures/with-handle-queue-defaults
             handler-chan
-            {:handler-opts {:format format}}
 
             (doseq [message test-messages-basic]
               (is (string? (sqs-ext/send-fifo-message fixtures/sqs-ext-config
