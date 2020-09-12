@@ -49,19 +49,22 @@
    (into {} (for [[sym fun] time-literals.read-write/tags]
               [(name sym) (transit/read-handler fun)]))})   ; omit "time/" for brevity
 
-(defn- transit-write
-  [arg]
-  (let [out (ByteArrayOutputStream.)
-        writer (transit/writer out :json write-handlers)]
-    (transit/write writer arg)
-    (.toString out)))
+(defn transit-write
+  [x]
+  (let [baos   (ByteArrayOutputStream.)
+        writer (transit/writer baos :json write-handlers)
+        _      (transit/write writer x)
+        return (.toString baos)]
+    (.reset baos)
+    return))
 
-(defn- transit-read
+(defn transit-read
   [json]
   (when json
-    (let [in (ByteArrayInputStream. (.getBytes json))
-          reader (transit/reader in :json read-handlers)]
-      (transit/read reader))))
+    (-> (.getBytes json)
+        (ByteArrayInputStream.)
+        (transit/reader :json read-handlers)
+        (transit/read))))
 
 (defn- unsupported-format-exception
   [got]
