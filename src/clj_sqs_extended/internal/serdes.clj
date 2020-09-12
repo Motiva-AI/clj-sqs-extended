@@ -49,14 +49,14 @@
    (into {} (for [[sym fun] time-literals.read-write/tags]
               [(name sym) (transit/read-handler fun)]))})   ; omit "time/" for brevity
 
-(defn- transit-write
+(defn transit-write
   [arg]
   (let [out (ByteArrayOutputStream.)
         writer (transit/writer out :json write-handlers)]
     (transit/write writer arg)
     (.toString out)))
 
-(defn- transit-read
+(defn transit-read
   [json]
   (when json
     (let [in (ByteArrayInputStream. (.getBytes json))
