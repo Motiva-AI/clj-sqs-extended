@@ -50,11 +50,13 @@
               [(name sym) (transit/read-handler fun)]))})   ; omit "time/" for brevity
 
 (defn transit-write
-  [arg]
-  (let [out (ByteArrayOutputStream.)
-        writer (transit/writer out :json write-handlers)]
-    (transit/write writer arg)
-    (.toString out)))
+  [x]
+  (let [baos   (ByteArrayOutputStream.)
+        writer (transit/writer baos :json write-handlers)
+        _      (transit/write writer x)
+        return (.toString baos)]
+    (.reset baos)
+    return))
 
 (defn transit-read
   [json]
