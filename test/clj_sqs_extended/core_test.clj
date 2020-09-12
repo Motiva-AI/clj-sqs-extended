@@ -3,6 +3,7 @@
             [clojure.core.async :refer [chan close! timeout alt!! <!!]]
             [clojure.core.async.impl.protocols :refer [closed?]]
             [bond.james :as bond :refer [with-spy]]
+            [wait-for.core :refer [wait-for]]
             [clj-sqs-extended.aws.sqs :as sqs]
             [clj-sqs-extended.core :as sqs-ext]
             [clj-sqs-extended.internal.receive :as receive]
@@ -175,7 +176,10 @@
                            {:auto-stop-loop false
                             :handler-opts   {:restart-limit         restart-limit
                                              :restart-delay-seconds restart-delay-seconds}})]
+
+             ;; XXXFI: wait-for doesn't make this much easier/better so, ...
              (Thread/sleep (+ (* restart-limit (* restart-delay-seconds 1000)) 500))
+
              (let [stats (stop-fn)]
                (is (= (:restart-count stats) restart-limit))))))
       (close! handler-chan))))
@@ -202,13 +206,16 @@
                            handler-chan
                            {:auto-stop-loop false
                             :handler-opts   {:restart-delay-seconds restart-delay-seconds}})]
-             ;; give the loop some time to handle that error ...
-             (Thread/sleep (+ (* restart-delay-seconds 1000) 500))
 
-             ;; verify that sending/receiving still works ...
-             (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
-                                                @fixtures/test-queue-url
-                                                test-message-with-time)))
+             ;; give the loop some time to handle that error and verify that sending/receiving still works ...
+             (letfn [(can-send-message
+                      []
+                      (string? (sqs-ext/send-message fixtures/sqs-ext-config
+                                                     @fixtures/test-queue-url
+                                                     test-message-with-time)))]
+               (is (wait-for can-send-message
+                             :interval (* restart-delay-seconds 1000)
+                             :timeout 3)))
              (is (= test-message-with-time (<!! handler-chan)))
              (let [stats (stop-fn)]
                ;; ... and that the loop was actually restarted ...
@@ -226,11 +233,15 @@
         (with-redefs-fn {#'sqs/receive-message
                          (fn [_ _ _]
                            (RuntimeException. "Testing runtime error"))}
-          #(let [stats (fixtures/with-handle-queue-defaults
-                         handler-chan)]
-             (Thread/sleep 500)
-             (is (= (:restart-count stats) 0))
-             (is (contains? stats :stopped-at)))))
+          (letfn [(loop-stopped-without-restart-attempts
+                   [stats]
+                   (and (= (:restart-count stats) 0)
+                        (contains? stats :stopped-at)))]
+            #(let [stats (fixtures/with-handle-queue-defaults
+                           handler-chan)]
+               (is (wait-for (partial loop-stopped-without-restart-attempts stats)
+                             :interval 1
+                             :timeout  3))))))
       (close! handler-chan))))
 
 (deftest nil-returned-after-loop-was-terminated
@@ -316,14 +327,16 @@
                     (-> fixtures/test-handler-fn bond/calls first :args)]
                 (is (fn? (last test-handler-fn-args))))
 
-              ;; nothing comes out of the channel within the visibility timeout ...
+              ;; nothing comes out of the channel within the visibility timeout
+              ;; (allowing 100ms of tolerance) ...
               (is (alt!!
                     handler-chan false
                     (timeout (- (* 1000 visibility-timeout) 100)) true))
 
               ;; but afterwards ...
-              (Thread/sleep 200)
-              (is (= (last test-messages-basic) (<!! handler-chan))))))
+              (is (wait-for #(= (last test-messages-basic) (<!! handler-chan))
+                            :interval 1
+                            :timeout  3)))))
 
         (close! handler-chan)))))
 

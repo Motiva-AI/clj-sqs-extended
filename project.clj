@@ -26,7 +26,8 @@
                    :dependencies [[org.clojure/tools.namespace "1.0.0"]
                                   [circleci/bond "0.4.0"]
                                   [circleci/circleci.test "0.4.3"]
-                                  [environ "1.2.0"]]
+                                  [environ "1.2.0"]
+                                  [motiva/wait-for "0.3.0"]]
 
                    :plugins [[lein-environ "1.2.0"]]
 
