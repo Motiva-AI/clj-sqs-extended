@@ -175,7 +175,7 @@
                            {:auto-stop-loop false
                             :handler-opts   {:restart-limit         restart-limit
                                              :restart-delay-seconds restart-delay-seconds}})]
-             (Thread/sleep (+ (* restart-limit (* restart-delay-seconds 1000)) 500))
+             (Thread/sleep (* restart-limit restart-delay-seconds 1000))
              (let [stats (stop-fn)]
                (is (= (:restart-count stats) restart-limit))))))
       (close! handler-chan))))
@@ -238,9 +238,11 @@
     (doseq [format [:transit :json]]
       (fixtures/with-test-standard-queue
         (let [out-chan (chan)
+              number-of-handler-threads-running (atom 0)
               stop-fn (sqs-ext/receive-loop fixtures/sqs-ext-config
                                             @fixtures/test-queue-url
                                             out-chan
+                                            number-of-handler-threads-running
                                             {:format format})]
           (is (fn? stop-fn))
           (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
@@ -331,18 +333,21 @@
 ;;           passes the entire SQS message into the channel so
 ;;           that the receipt handle is accessible in the next test.
 (defn- launch-handler-threads-with-complete-sqs-message-forwarding
-  [number-of-handler-threads receive-chan auto-delete handler-fn]
+  [number-of-handler-threads number-of-handler-threads-running receive-chan auto-delete handler-fn]
   (dotimes [_ number-of-handler-threads]
+    (swap! number-of-handler-threads-running inc)
     (thread
       (loop []
-        (when-let [message (<!! receive-chan)]
-          (try
-            (if auto-delete
-              (handler-fn message)
-              (handler-fn message (:done-fn message)))
-            (catch Throwable _
-              (println "Handler function threw an error!")))
-          (recur))))))
+        (if-let [message (<!! receive-chan)]
+          (do
+            (try
+              (if auto-delete
+                (handler-fn message)
+                (handler-fn message (:done-fn message)))
+              (catch Throwable _
+                (println "Handler function threw an error!")))
+            (recur))
+          (swap! number-of-handler-threads-running dec))))))
 
 (deftest done-fn-handle-absent-when-auto-delete-true
   (testing "done-fn handle is not present in response when auto-delete is true"

@@ -1,6 +1,7 @@
 (ns clj-sqs-extended.internal.receive
   (:require [clojure.core.async :refer [go go-loop close! <! >!]]
             [clojure.tools.logging :as log]
+            [wait-for.core :refer [wait-for]]
             [tick.alpha.api :as t]
             [clj-sqs-extended.aws.sqs :as sqs])
   (:import [java.net
@@ -20,17 +21,19 @@
   (t/seconds (t/between t1 t2)))
 
 (defn- init-receive-loop-state
-  [sqs-ext-client queue-url receive-opts out-chan]
+  [sqs-ext-client queue-url receive-opts number-of-handler-threads-running out-chan]
   (log/infof "Initializing new receive-loop state for queue '%s' ..." queue-url)
-  (atom {:running   true
-         :stats     {:iteration     0
-                     :restart-count 0
-                     :started-at    (t/now)}
-         :queue-url queue-url
-         :in-chan   (sqs/receive-message-channeled sqs-ext-client
-                                                   queue-url
-                                                   receive-opts)
-         :out-chan  out-chan}))
+  (atom {:running                           true
+         :stats                             {:iteration     0
+                                             :restart-count 0
+                                             :started-at    (t/now)}
+         :queue-url                         queue-url
+         :in-chan                           (sqs/receive-message-channeled
+                                              sqs-ext-client
+                                              queue-url
+                                              receive-opts)
+         :out-chan                          out-chan
+         :number-of-handler-threads-running number-of-handler-threads-running}))
 
 (defn- update-receive-loop-stats
   [loop-state]
@@ -50,7 +53,13 @@
     (swap! loop-state assoc :running false)
     (swap! loop-state assoc-in [:stats :stopped-at] (t/now))
     (close! (:in-chan @loop-state))
-    (close! (:out-chan @loop-state)))
+    (close! (:out-chan @loop-state))
+    (letfn [(number-of-running-receivers
+             [loop-state]
+             (deref (:number-of-handler-threads-running @loop-state)))]
+      (wait-for #(= 0 (number-of-running-receivers loop-state))
+                :interval 1
+                :timeout 10)))
   (:stats @loop-state))
 
 (defn- restart-receive-loop
@@ -85,7 +94,7 @@
                        (format "receive-loop for queue '%s' failed."
                                (:queue-url @loop-state))
                        {:reason (.getMessage error)})))]
-                        
+
       (cond
         (and (error-might-be-recovered-by-restarting? error)
              (restart-limit-not-reached? loop-state restart-limit))
@@ -120,16 +129,17 @@
       (done-fn))))
 
 (defn receive-loop
-  ([sqs-ext-client queue-url out-chan]
-   (receive-loop sqs-ext-client queue-url out-chan {}))
+  ([sqs-ext-client queue-url out-chan number-of-handler-threads-running]
+   (receive-loop sqs-ext-client queue-url out-chan number-of-handler-threads-running {}))
 
-  ([sqs-ext-client queue-url out-chan
+  ([sqs-ext-client queue-url out-chan number-of-handler-threads-running
     {:keys [auto-delete
             restart-delay-seconds]
      :as   receive-opts}]
    (let [loop-state (init-receive-loop-state sqs-ext-client
                                              queue-url
                                              receive-opts
+                                             number-of-handler-threads-running
                                              out-chan)]
      (go-loop []
        (swap! loop-state update-receive-loop-stats)

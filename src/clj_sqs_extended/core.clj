@@ -18,19 +18,22 @@
 (provide-with-auto-client-from-config receive-loop receive/receive-loop)
 
 (defn- launch-handler-threads
-  [number-of-handler-threads receive-chan auto-delete handler-fn]
+  [number-of-handler-threads number-of-handler-threads-running receive-chan auto-delete handler-fn]
   (dotimes [_ number-of-handler-threads]
+    (swap! number-of-handler-threads-running inc)
     (thread
       (loop []
-        (when-let [{message-body :body
-                    done-fn      :done-fn} (<!! receive-chan)]
-          (try
-            (if auto-delete
-              (handler-fn message-body)
-              (handler-fn message-body done-fn))
-            (catch Throwable error
-              (log/error error "Handler function threw an error!")))
-          (recur))))))
+        (if-let [{message-body :body
+                  done-fn      :done-fn} (<!! receive-chan)]
+          (do
+            (try
+              (if auto-delete
+                (handler-fn message-body)
+                (handler-fn message-body done-fn))
+              (catch Throwable error
+                (log/error error "Handler function threw an error!")))
+            (recur))
+          (swap! number-of-handler-threads-running dec))))))
 
 (defn handle-queue
   "Setup a loop that listens to a queue and processes all incoming messages.
@@ -95,9 +98,11 @@
    handler-fn]
   (let [sqs-ext-client (sqs/sqs-ext-client sqs-ext-config)
         receive-chan (chan)
+        number-of-handler-threads-running (atom 0)
         stop-fn (receive/receive-loop sqs-ext-client
                                       queue-url
                                       receive-chan
+                                      number-of-handler-threads-running
                                       {:auto-delete           auto-delete
                                        :restart-limit         restart-limit
                                        :restart-delay-seconds restart-delay-seconds})]
@@ -113,6 +118,7 @@
                restart-delay-seconds
                auto-delete)
     (launch-handler-threads number-of-handler-threads
+                            number-of-handler-threads-running
                             receive-chan
                             auto-delete
                             handler-fn)
