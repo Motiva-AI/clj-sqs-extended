@@ -40,10 +40,10 @@
                                           test-standard-queue-name
                                           opts))
   (f)
-  ;; TODO: https://github.com/Motiva-AI/clj-sqs-extended/issues/27
-  (Thread/sleep 500)
-  (sqs-ext/delete-queue! sqs-ext-config
-                         @test-queue-url))
+  (let [queue-to-delete @test-queue-url]
+    (reset! test-queue-url nil)
+    (sqs-ext/delete-queue! sqs-ext-config
+                           queue-to-delete)))
 
 (defmacro with-test-standard-queue
   [& body]
@@ -61,10 +61,10 @@
           (sqs-ext/create-fifo-queue! sqs-ext-config
                                       test-fifo-queue-name))
   (f)
-  ;; TODO: https://github.com/Motiva-AI/clj-sqs-extended/issues/27
-  (Thread/sleep 500)
-  (sqs-ext/delete-queue! sqs-ext-config
-                         @test-queue-url))
+  (let [queue-to-delete @test-queue-url]
+    (reset! test-queue-url nil)
+    (sqs-ext/delete-queue! sqs-ext-config
+                           queue-to-delete)))
 
 (defmacro with-test-fifo-queue
   [& body]
@@ -75,7 +75,8 @@
    (>!! chan message))
   ([chan message done-fn]
    (reset! test-handler-done-fn done-fn)
-   (>!! chan message)))
+   (when @test-queue-url
+     (>!! chan message))))
 
 (defn wrap-handle-queue
   [handler-chan settings f]
