@@ -1,5 +1,6 @@
 (ns clj-sqs-extended.serdes-test
   (:require [clojure.test :refer [deftest is testing]]
+            [clj-time.core :as clj-time]
             [clj-sqs-extended.internal.serdes :as serdes]
             [clj-sqs-extended.test-helpers :as helpers]))
 
@@ -18,7 +19,15 @@
       (is (= message
              (serdes/deserialize
                (serdes/serialize message :transit)
-               :transit))))))
+               :transit)))))
+
+  (testing "Transit roundtrip with a message including a org.joda.time.DateTime"
+    (let [message {:id        (rand-int 65535)
+                   :timestamp (clj-time/now)}]
+      (is (= message
+             (-> message
+                 (serdes/serialize :transit)
+                 (serdes/deserialize :transit)))))))
 
 (deftest nil-handled-properly
   (testing "(De)serializing nil"

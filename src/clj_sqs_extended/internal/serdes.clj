@@ -40,14 +40,18 @@
 
 (def ^:private write-handlers
   {:handlers
-   (into {}
-         (for [[tick-class host-class] time-classes]
-           [host-class (transit/write-handler (constantly (name tick-class)) str)]))})
+   (-> (into {}
+             (for [[tick-class host-class] time-classes]
+               [host-class (transit/write-handler (constantly (name tick-class)) str)]))
+       (assoc org.joda.time.DateTime
+              (transit/write-handler "joda-time" (fn [v] (str v)))))})
 
 (def ^:private read-handlers
   {:handlers
-   (into {} (for [[sym fun] time-literals.read-write/tags]
-              [(name sym) (transit/read-handler fun)]))})   ; omit "time/" for brevity
+   (-> (into {} (for [[sym fun] time-literals.read-write/tags]
+              [(name sym) (transit/read-handler fun)])) ; omit "time/" for brevity
+       (assoc "joda-time"
+              (transit/read-handler (fn [r] (org.joda.time.DateTime/parse r)))))})
 
 (defn transit-write
   [x]
