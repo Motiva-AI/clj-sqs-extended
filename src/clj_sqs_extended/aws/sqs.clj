@@ -218,13 +218,18 @@
   ([sqs-client queue-url
     {:keys [wait-time-in-seconds]
      :or   {wait-time-in-seconds 0}}]
-   (let [message (-> (wait-and-receive-one-message-from-sqs sqs-client queue-url wait-time-in-seconds)
-                     (message))]
-     (if-let [deserialized-message
-              (some->> message
-                       (:format)
-                       (serdes/deserialize (:body message)))]
-       (assoc message :body deserialized-message)
+   (let [{message-body   :body
+          message-format :format}
+         (-> (wait-and-receive-one-message-from-sqs
+               sqs-client
+               queue-url
+               wait-time-in-seconds)
+             (message))]
+
+     (if message-format
+       (->> (serdes/deserialize message-body message-format)
+            (assoc message :body))
+
        message))))
 
 (defn- receive-to-channel
