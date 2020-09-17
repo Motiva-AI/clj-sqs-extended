@@ -36,7 +36,9 @@
                          :s3-endpoint            "http://localhost:4566"
                          :region                 "us-east-2"
                          :integration-access-key ""
-                         :integration-secret-key ""}}}
+                         :integration-secret-key ""}}
+
+             :provided {:dependencies [[clj-time "0.15.2"]]}}
 
   :aliases {"test"   ["run" "-m" "circleci.test/dir" :project/test-paths]
             "tests"  ["run" "-m" "circleci.test"]
