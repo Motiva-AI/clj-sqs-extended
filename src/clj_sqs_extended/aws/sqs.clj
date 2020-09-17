@@ -185,17 +185,17 @@
     {}))
 
 (defn- receive-only-one-message-request
-  [queue-url wait-time]
+  [queue-url wait-time-in-seconds]
   (doto (ReceiveMessageRequest. queue-url)
-      (.setWaitTimeSeconds (int wait-time))
+      (.setWaitTimeSeconds (int wait-time-in-seconds))
       ;; WATCHOUT: Without the next line our custom SerdesFormat attribute will not be received!
       (.setAttributeNames ["All"])
       ;; WATCHOUT: The next line is a design choice to read one message at a time from the queue
       (.setMaxNumberOfMessages (int 1))))
 
 (defn wait-and-receive-one-message-from-sqs
-  [sqs-client queue-url wait-time]
-  (->> (receive-only-one-message-request queue-url wait-time)
+  [sqs-client queue-url wait-time-in-seconds]
+  (->> (receive-only-one-message-request queue-url wait-time-in-seconds)
        (.receiveMessage sqs-client)
        (.getMessages)
        ;; we're calling (first) here because we've .setMaxNumberOfMessages = 1
@@ -216,9 +216,9 @@
    (receive-message sqs-client queue-url {}))
 
   ([sqs-client queue-url
-    {:keys [wait-time]
-     :or   {wait-time 0}}]
-   (let [message (-> (wait-and-receive-one-message-from-sqs sqs-client queue-url wait-time)
+    {:keys [wait-time-in-seconds]
+     :or   {wait-time-in-seconds 0}}]
+   (let [message (-> (wait-and-receive-one-message-from-sqs sqs-client queue-url wait-time-in-seconds)
                      (message))]
      (if-let [deserialized-message
               (some->> message
