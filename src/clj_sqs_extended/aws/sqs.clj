@@ -215,9 +215,11 @@
      :or   {wait-time 0}}]
    (let [request (build-receive-message-request queue-url wait-time)
          message (receive-one-message sqs-client request)]
-     (if-let [payload (serdes/deserialize (:body message)
-                                          (:format message))]
-       (assoc message :body payload)
+     (if-let [deserialized-message
+              (some->> message
+                       (:format)
+                       (serdes/deserialize (:body message)))]
+       (assoc message :body deserialized-message)
        message))))
 
 (defn- receive-to-channel
