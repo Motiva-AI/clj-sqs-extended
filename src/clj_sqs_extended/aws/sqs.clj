@@ -171,10 +171,11 @@
 
 (defn- get-serdes-format-attribute
   [message]
-  (when message
-    (let [format (-> (.getMessageAttributes message)
-                     (get clj-sqs-ext-format-attribute))]
-      (keyword (.getStringValue format)))))
+  (some-> message
+          (.getMessageAttributes)
+          (get clj-sqs-ext-format-attribute)
+          (.getStringValue)
+          (keyword)))
 
 (defn- extract-relevant-keys-from-message
   [message]
