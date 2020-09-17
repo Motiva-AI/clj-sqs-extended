@@ -188,9 +188,9 @@
   [queue-url wait-time-in-seconds]
   (doto (ReceiveMessageRequest. queue-url)
       (.setWaitTimeSeconds (int wait-time-in-seconds))
-      ;; WATCHOUT: Without the next line our custom SerdesFormat attribute will not be received!
+      ;; this below is to satisfy some quirk with SQS for our custom serdes-format attribute to be received
       (.setAttributeNames ["All"])
-      ;; WATCHOUT: The next line is a design choice to read one message at a time from the queue
+      ;; this is a design choice to read only one message at a time
       (.setMaxNumberOfMessages (int 1))))
 
 (defn wait-and-receive-one-message-from-sqs
