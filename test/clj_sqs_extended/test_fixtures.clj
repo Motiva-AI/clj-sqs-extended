@@ -40,8 +40,6 @@
                                           test-standard-queue-name
                                           opts))
   (f)
-  ;; TODO: https://github.com/Motiva-AI/clj-sqs-extended/issues/27
-  (Thread/sleep 500)
   (sqs-ext/delete-queue! sqs-ext-config
                          @test-queue-url))
 
@@ -61,8 +59,6 @@
           (sqs-ext/create-fifo-queue! sqs-ext-config
                                       test-fifo-queue-name))
   (f)
-  ;; TODO: https://github.com/Motiva-AI/clj-sqs-extended/issues/27
-  (Thread/sleep 500)
   (sqs-ext/delete-queue! sqs-ext-config
                          @test-queue-url))
 
