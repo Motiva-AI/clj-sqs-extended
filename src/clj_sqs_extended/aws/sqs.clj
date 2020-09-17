@@ -184,7 +184,7 @@
         (select-keys [:messageId :receiptHandle :body]))
     {}))
 
-(defn- build-receive-message-request
+(defn- receive-only-one-message-request
   [queue-url wait-time]
   (doto (ReceiveMessageRequest. queue-url)
       (.setWaitTimeSeconds (int wait-time))
@@ -193,15 +193,20 @@
       ;; WATCHOUT: The next line is a design choice to read one message at a time from the queue
       (.setMaxNumberOfMessages (int 1))))
 
-;; WATCHOUT: Even though we call .getMessages we can be sure that we'll only get a single message
-;;           back because we built the receive request with .setMaxNumberOfMessages 1 above.
-(defn- receive-one-message
-  [sqs-client request]
-  (let [sqs-response (->> (.receiveMessage sqs-client request)
-                          (.getMessages)
-                          (first))
-        payload (extract-relevant-keys-from-message sqs-response)
-        format (get-serdes-format-attribute sqs-response)]
+(defn wait-and-receive-one-message-from-sqs
+  [sqs-client queue-url wait-time]
+  (->> (receive-only-one-message-request queue-url wait-time)
+       (.receiveMessage sqs-client)
+       (.getMessages)
+       ;; we're calling (first) here because we've .setMaxNumberOfMessages = 1
+       ;; in the receive-message-request, thus, we can safely assume that
+       ;; there's only one message received up to here.
+       (first)))
+
+(defn message
+  [raw-message]
+  (let [payload (extract-relevant-keys-from-message raw-message)
+        format (get-serdes-format-attribute raw-message)]
     (if (seq payload)
       (assoc payload :format format)
       payload)))
@@ -213,8 +218,8 @@
   ([sqs-client queue-url
     {:keys [wait-time]
      :or   {wait-time 0}}]
-   (let [request (build-receive-message-request queue-url wait-time)
-         message (receive-one-message sqs-client request)]
+   (let [message (-> (wait-and-receive-one-message-from-sqs sqs-client queue-url wait-time)
+                     (message))]
      (if-let [deserialized-message
               (some->> message
                        (:format)
