@@ -216,7 +216,9 @@
 
   ([sqs-client queue-url
     {:keys [wait-time-in-seconds]
-     :or   {wait-time-in-seconds 0}}]
+     ;; Defaults to maximum long polling
+     ;; https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-short-and-long-polling.html#sqs-long-polling
+     :or   {wait-time-in-seconds 20}}]
    (let [{message-body   :body
           message-format :format
           :as message}
