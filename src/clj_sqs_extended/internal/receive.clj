@@ -84,7 +84,7 @@
               (throw (ex-info
                        (format "receive-loop for queue '%s' failed."
                                (:queue-url @loop-state))
-                       {:reason (.getMessage error)})))]
+                       {:error error})))]
 
       (cond
         (and (error-might-be-recovered-by-restarting? error)
