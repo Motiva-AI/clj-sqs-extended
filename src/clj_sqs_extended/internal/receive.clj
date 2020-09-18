@@ -21,7 +21,7 @@
 
 (defn- init-receive-loop-state
   [sqs-ext-client queue-url receive-opts out-chan]
-  (log/infof "Initializing new receive-loop state for queue '%s' ..." queue-url)
+  (log/debugf "Initializing new receive-loop state for queue '%s' ..." queue-url)
   (atom {:running   true
          :stats     {:iteration     0
                      :restart-count 0
@@ -113,9 +113,11 @@
                     (not auto-delete) (assoc :done-fn done-fn))]
     (if (:body message)
       (go (>! (:out-chan @loop-state) msg))
-      (log/warnf "Queue '%s' received a nil (:body message), message: %s"
+
+      (log/infof "Queue '%s' received a nil (:body message), message: %s"
                  (:queue-url @loop-state)
                  message))
+
     (when auto-delete
       (done-fn))))
 
