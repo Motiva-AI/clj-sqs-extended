@@ -237,8 +237,8 @@
   (let [ch (chan)]
     (go-loop []
       (try
-        (let [message (receive-message sqs-client queue-url opts)]
-          (>! ch message))
+        (some->> (receive-message sqs-client queue-url opts)
+                 (>! ch))
         (catch Throwable e
           (>! ch e)))
       (when-not (async-protocols/closed? ch)
