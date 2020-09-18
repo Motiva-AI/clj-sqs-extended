@@ -179,10 +179,9 @@
 
 (defn- extract-relevant-keys-from-message
   [message]
-  (if message
-    (-> (bean message)
-        (select-keys [:messageId :receiptHandle :body]))
-    {}))
+  (some-> message
+          (bean)
+          (select-keys [:messageId :receiptHandle :body])))
 
 (defn- receive-only-one-message-request
   [queue-url wait-time-in-seconds]

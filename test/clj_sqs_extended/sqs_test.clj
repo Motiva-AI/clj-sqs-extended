@@ -44,9 +44,8 @@
   (fixtures/with-test-standard-queue
     (bond/with-stub! [[sqs/wait-and-receive-one-message-from-sqs (constantly nil)]]
       ;; ensure that this doesn't crash
-      (is (= {}
-             (sqs/receive-message @fixtures/test-sqs-ext-client
-                                  @fixtures/test-queue-url))))))
+      (is (nil? (sqs/receive-message @fixtures/test-sqs-ext-client
+                                     @fixtures/test-queue-url))))))
 
 (deftest can-receive-fifo-messages
   (testing "Receiving multiple messages from FIFO queue in correct order"
