@@ -171,52 +171,65 @@
 
 (defn- get-serdes-format-attribute
   [message]
-  (when message
-    (let [format (-> (.getMessageAttributes message)
-                     (get clj-sqs-ext-format-attribute))]
-      (keyword (.getStringValue format)))))
+  (some-> message
+          (.getMessageAttributes)
+          (get clj-sqs-ext-format-attribute)
+          (.getStringValue)
+          (keyword)))
 
 (defn- extract-relevant-keys-from-message
   [message]
-  (if message
-    (-> (bean message)
-        (select-keys [:messageId :receiptHandle :body]))
-    {}))
+  (some-> message
+          (bean)
+          (select-keys [:messageId :receiptHandle :body])))
 
-(defn- build-receive-message-request
-  [queue-url wait-time]
+(defn- receive-only-one-message-request
+  [queue-url wait-time-in-seconds]
   (doto (ReceiveMessageRequest. queue-url)
-      (.setWaitTimeSeconds (int wait-time))
-      ;; WATCHOUT: Without the next line our custom SerdesFormat attribute will not be received!
+      (.setWaitTimeSeconds (int wait-time-in-seconds))
+      ;; this below is to satisfy some quirk with SQS for our custom serdes-format attribute to be received
       (.setAttributeNames ["All"])
-      ;; WATCHOUT: The next line is a design choice to read one message at a time from the queue
+      ;; this is a design choice to read only one message at a time
       (.setMaxNumberOfMessages (int 1))))
 
-;; WATCHOUT: Even though we call .getMessages we can be sure that we'll only get a single message
-;;           back because we built the receive request with .setMaxNumberOfMessages 1 above.
-(defn- receive-one-message
-  [sqs-client request]
-  (let [sqs-response (->> (.receiveMessage sqs-client request)
-                          (.getMessages)
-                          (first))
-        payload (extract-relevant-keys-from-message sqs-response)
-        format (get-serdes-format-attribute sqs-response)]
-    (if (seq payload)
-      (assoc payload :format format)
-      payload)))
+(defn wait-and-receive-one-message-from-sqs
+  [sqs-client queue-url wait-time-in-seconds]
+  (->> (receive-only-one-message-request queue-url wait-time-in-seconds)
+       (.receiveMessage sqs-client)
+       (.getMessages)
+       ;; we're calling (first) here because we've .setMaxNumberOfMessages = 1
+       ;; in the receive-message-request, thus, we can safely assume that
+       ;; there's only one message received up to here.
+       (first)))
+
+(defn parse-message
+  [raw-message]
+  (let [coll   (extract-relevant-keys-from-message raw-message)
+        format (get-serdes-format-attribute raw-message)]
+    (if (seq coll)
+      (assoc coll :format format)
+      coll)))
 
 (defn receive-message
   ([sqs-client queue-url]
    (receive-message sqs-client queue-url {}))
 
   ([sqs-client queue-url
-    {:keys [wait-time]
-     :or   {wait-time 0}}]
-   (let [request (build-receive-message-request queue-url wait-time)
-         message (receive-one-message sqs-client request)]
-     (if-let [payload (serdes/deserialize (:body message)
-                                          (:format message))]
-       (assoc message :body payload)
+    {:keys [wait-time-in-seconds]
+     :or   {wait-time-in-seconds 0}}]
+   (let [{message-body   :body
+          message-format :format
+          :as message}
+         (-> (wait-and-receive-one-message-from-sqs
+               sqs-client
+               queue-url
+               wait-time-in-seconds)
+             (parse-message))]
+
+     (if message-format
+       (->> (serdes/deserialize message-body message-format)
+            (assoc message :body))
+
        message))))
 
 (defn- receive-to-channel
@@ -224,8 +237,8 @@
   (let [ch (chan)]
     (go-loop []
       (try
-        (let [message (receive-message sqs-client queue-url opts)]
-          (>! ch message))
+        (some->> (receive-message sqs-client queue-url opts)
+                 (>! ch))
         (catch Throwable e
           (>! ch e)))
       (when-not (async-protocols/closed? ch)

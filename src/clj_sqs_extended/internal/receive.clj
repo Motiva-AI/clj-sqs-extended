@@ -84,8 +84,8 @@
               (throw (ex-info
                        (format "receive-loop for queue '%s' failed."
                                (:queue-url @loop-state))
-                       {:reason (.getMessage error)})))]
-                        
+                       {:error error})))]
+
       (cond
         (and (error-might-be-recovered-by-restarting? error)
              (restart-limit-not-reached? loop-state restart-limit))
@@ -113,7 +113,7 @@
                     (not auto-delete) (assoc :done-fn done-fn))]
     (if (:body message)
       (go (>! (:out-chan @loop-state) msg))
-      (log/warnf "Queue '%s' received a nil body message: %s"
+      (log/warnf "Queue '%s' received a nil (:body message), message: %s"
                  (:queue-url @loop-state)
                  message))
     (when auto-delete

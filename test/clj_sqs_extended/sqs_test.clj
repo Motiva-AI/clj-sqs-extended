@@ -1,5 +1,6 @@
 (ns clj-sqs-extended.sqs-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
+            [bond.james :as bond]
             [clojure.tools.logging :as log]
             [clj-sqs-extended.aws.sqs :as sqs]
             [clj-sqs-extended.test-fixtures :as fixtures]
@@ -32,6 +33,19 @@
           (let [response (sqs/receive-message @fixtures/test-sqs-ext-client
                                               @fixtures/test-queue-url)]
             (is (= test-message (:body response)))))))))
+
+(deftest safely-receive-nil-message
+  ;; sqs/wait-and-receive-one-message-from-sqs returns an empty list when
+  ;; WaitTimeSeconds is reached
+  ;;
+  ;; Reference:
+  ;; See WaitTimeSeconds section in
+  ;; https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_ReceiveMessage.html#API_ReceiveMessage_ResponseElements
+  (fixtures/with-test-standard-queue
+    (bond/with-stub! [[sqs/wait-and-receive-one-message-from-sqs (constantly nil)]]
+      ;; ensure that this doesn't crash
+      (is (nil? (sqs/receive-message @fixtures/test-sqs-ext-client
+                                     @fixtures/test-queue-url))))))
 
 (deftest can-receive-fifo-messages
   (testing "Receiving multiple messages from FIFO queue in correct order"
