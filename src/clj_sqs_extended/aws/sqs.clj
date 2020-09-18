@@ -188,7 +188,7 @@
   (doto (ReceiveMessageRequest. queue-url)
       (.setWaitTimeSeconds (int wait-time-in-seconds))
       ;; this below is to satisfy some quirk with SQS for our custom serdes-format attribute to be received
-      (.setAttributeNames ["All"])
+      (.setMessageAttributeNames [clj-sqs-ext-format-attribute])
       ;; this is a design choice to read only one message at a time
       (.setMaxNumberOfMessages (int 1))))
 
