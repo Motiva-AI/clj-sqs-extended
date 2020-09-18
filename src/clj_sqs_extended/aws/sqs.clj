@@ -203,13 +203,13 @@
        ;; there's only one message received up to here.
        (first)))
 
-(defn message
+(defn parse-message
   [raw-message]
-  (let [payload (extract-relevant-keys-from-message raw-message)
+  (let [coll   (extract-relevant-keys-from-message raw-message)
         format (get-serdes-format-attribute raw-message)]
-    (if (seq payload)
-      (assoc payload :format format)
-      payload)))
+    (if (seq coll)
+      (assoc coll :format format)
+      coll)))
 
 (defn receive-message
   ([sqs-client queue-url]
@@ -219,12 +219,13 @@
     {:keys [wait-time-in-seconds]
      :or   {wait-time-in-seconds 0}}]
    (let [{message-body   :body
-          message-format :format}
+          message-format :format
+          :as message}
          (-> (wait-and-receive-one-message-from-sqs
                sqs-client
                queue-url
                wait-time-in-seconds)
-             (message))]
+             (parse-message))]
 
      (if message-format
        (->> (serdes/deserialize message-body message-format)
