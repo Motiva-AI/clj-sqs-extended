@@ -1,5 +1,5 @@
 (ns clj-sqs-extended.internal.receive
-  (:require [clojure.core.async :refer [go go-loop close! <! >!]]
+  (:require [clojure.core.async :refer [go-loop close! <! >!!]]
             [clojure.tools.logging :as log]
             [tick.alpha.api :as t]
             [clj-sqs-extended.aws.sqs :as sqs])
@@ -112,7 +112,7 @@
         msg (cond-> message
                     (not auto-delete) (assoc :done-fn done-fn))]
     (if (:body message)
-      (go (>! (:out-chan @loop-state) msg))
+      (>!! (:out-chan @loop-state) msg)
 
       (log/infof "Queue '%s' received a nil (:body message), message: %s"
                  (:queue-url @loop-state)
