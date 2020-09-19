@@ -1,7 +1,7 @@
 (ns clj-sqs-extended.integration-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [environ.core :refer [env]]
-            [clojure.core.async :refer [chan <!!]]
+            [clojure.core.async :refer [chan <!! >!!]]
             [clj-sqs-extended.core :as sqs-ext]
             [clj-sqs-extended.test-helpers :as helpers]))
 
@@ -19,27 +19,29 @@
   [f]
   (f)
   ;; From AWS: Only one PurgeQueue operation is allowed every 60 seconds
-  #_(sqs-ext/purge-queue! sqs-ext-config standard-queue-url))
+  (sqs-ext/purge-queue! (sqs-ext-config) standard-queue-url))
 
 (use-fixtures :once wrap-purge-integration-queues)
 
 (deftest ^:integration roundtrip-standard-queue-test
   (testing "Small message, pure SQS"
-    (let [c (chan)
+    (let [c          (chan)
+          handler-fn (fn [& args] (>!! c args))
+
           msg1 (helpers/random-message-basic)
           msg2 (helpers/random-message-basic)]
 
       (is (sqs-ext/send-message (sqs-ext-config) standard-queue-url msg1 {:format :transit}))
 
-      (let [stop-fn (sqs-ext/receive-loop
+      (let [stop-fn (sqs-ext/handle-queue
                       (sqs-ext-config)
-                      standard-queue-url
-                      c
-                      {:auto-delete true})]
-        (is (= msg1 (:body (<!! c))))
+                      {:queue-url standard-queue-url
+                       :auto-delete true}
+                      handler-fn)]
+        (is (= [msg1] (<!! c)))
 
         (is (sqs-ext/send-message (sqs-ext-config) standard-queue-url msg2 {:format :json}))
-        (is (= msg2 (:body (<!! c))))
+        (is (= [msg2] (<!! c)))
 
         ;; stops receive-loop
         (let [stats (stop-fn)]
