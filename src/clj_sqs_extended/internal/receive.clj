@@ -45,8 +45,8 @@
 (defn- stop-receive-loop
   [loop-state]
   (when (:running @loop-state)
-    (log/warnf "Terminating receive-loop for queue '%s' ..."
-               (:queue-url @loop-state))
+    (log/debugf "Terminating receive-loop for queue '%s' ..."
+                (:queue-url @loop-state))
     (swap! loop-state assoc :running false)
     (swap! loop-state assoc-in [:stats :stopped-at] (t/now))
     (close! (:in-chan @loop-state))
