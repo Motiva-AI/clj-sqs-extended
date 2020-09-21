@@ -156,7 +156,8 @@
 
        (if (:running @loop-state)
          (recur)
-         (log/infof "Receive-loop terminated for %s"
+         (log/infof "Receive-loop terminated for %s, stats: %s"
+                    queue-url
                     (:stats @loop-state))))
 
      (partial stop-receive-loop loop-state))))
