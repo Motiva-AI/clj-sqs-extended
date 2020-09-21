@@ -15,7 +15,7 @@
                SocketException
                HttpTimeoutException} (type error)))
 
-(defn- secs-between
+(defn- seconds-between
   [t1 t2]
   (t/seconds (t/between t1 t2)))
 
@@ -37,10 +37,14 @@
   (let [now (t/now)]
     (-> loop-state
         (update-in [:stats :iteration] inc)
-        (assoc-in [:stats :last-iteration-started-at] now)
-        (assoc-in [:stats :loop-duration]
-                  (secs-between (-> loop-state :stats :started-at)
-                                now)))))
+        ;; ensure that :last-loop-duration-in-seconds is updated before
+        ;; updating :last-iteration-started-at
+        (assoc-in [:stats :last-loop-duration-in-seconds]
+                  (seconds-between
+                    (or (-> loop-state :stats :last-iteration-started-at)
+                        (-> loop-state :stats :started-at))
+                    now))
+        (assoc-in [:stats :last-iteration-started-at] now))))
 
 (defn- stop-receive-loop
   [loop-state]

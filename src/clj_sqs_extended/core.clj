@@ -75,7 +75,7 @@
                        :started-at    (t/now)      A tick instant timestamp when the loop was started
                        :last-iteration-started-at  A tick instant timestamp when the loop began last
                        :stopped-at                 A tick instant timestamp when the loop was stopped
-                       :loop-duration}             Total loop duration in seconds"
+                       :last-loop-duration-in-seconds} Last loop's running time in seconds"
   [{:keys [access-key
            secret-key
            s3-endpoint
