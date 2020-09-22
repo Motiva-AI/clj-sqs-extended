@@ -47,20 +47,19 @@
       (is (empty? (sqs/receive-messages @fixtures/test-sqs-ext-client
                                         @fixtures/test-queue-url))))))
 
-(deftest can-receive-fifo-messages
-  (testing "Receiving multiple messages from FIFO queue in correct order"
-    (fixtures/with-test-fifo-queue
-      (doseq [format [:transit :json]]
-        (doseq [test-message test-messages]
-          (sqs/send-fifo-message @fixtures/test-sqs-ext-client
-                                 @fixtures/test-queue-url
-                                 test-message
-                                 (helpers/random-group-id)
-                                 {:format format}))
-        (doseq [test-message test-messages]
-          (let [response (sqs/receive-messages @fixtures/test-sqs-ext-client
-                                               @fixtures/test-queue-url)]
-            (is (= [test-message] (map :body response)))))))))
+(deftest can-receive-fifo-message
+  (fixtures/with-test-fifo-queue
+    (doseq [format [:transit :json]]
+      (let [test-message (first test-messages)]
+        (sqs/send-fifo-message @fixtures/test-sqs-ext-client
+                               @fixtures/test-queue-url
+                               test-message
+                               (helpers/random-group-id)
+                               {:format format})
+
+        (let [response (sqs/receive-messages @fixtures/test-sqs-ext-client
+                                             @fixtures/test-queue-url)]
+          (is (= [test-message] (map :body response))))))))
 
 (deftest can-send-message-larger-than-256kb
   (testing "Sending a message with more than 256kb of data (via S3 bucket) in raw format"

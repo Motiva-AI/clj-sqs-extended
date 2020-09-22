@@ -123,15 +123,14 @@
           (fixtures/with-handle-queue-defaults
             handler-chan
 
-            (doseq [message test-messages-basic]
+            (let [message (first test-messages-basic)]
               (is (string? (sqs-ext/send-fifo-message fixtures/sqs-ext-config
                                                       @fixtures/test-queue-url
                                                       message
                                                       (helpers/random-group-id)
-                                                      {:format format}))))
-            (doseq [message test-messages-basic]
-              (let [received-message (<!! handler-chan)]
-                (is (= message received-message))))))
+                                                      {:format format})))
+
+              (is (= message (<!! handler-chan))))))
         (close! handler-chan)))))
 
 (deftest handle-queue-terminates-with-non-existing-queue
