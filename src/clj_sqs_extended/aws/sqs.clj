@@ -234,7 +234,7 @@
 
        message))))
 
-(defn- receive-to-channel
+(defn receive-to-channel
   [sqs-client queue-url opts]
   (let [ch (chan)]
     (go-loop []
@@ -247,31 +247,3 @@
         (recur)))
     ch))
 
-(defn- multiplex
-  [chs]
-  (let [ch (chan)]
-    (doseq [c chs]
-      (go-loop []
-        (let [v (<! c)]
-          (>! ch v)
-          (when (some? v)
-            (recur)))))
-    ch))
-
-(defn receive-message-channeled
-  ([sqs-client queue-url]
-   (receive-message-channeled sqs-client queue-url {}))
-
-  ([sqs-client queue-url
-    {:keys [num-consumers]
-     :or   {num-consumers 1}
-     :as   opts}]
-   (if (= num-consumers 1)
-     (receive-to-channel sqs-client queue-url opts)
-     (multiplex
-       (loop [chs []
-              n num-consumers]
-         (if (= n 0)
-           chs
-           (let [ch (receive-to-channel sqs-client queue-url opts)]
-             (recur (conj chs ch) (dec n)))))))))

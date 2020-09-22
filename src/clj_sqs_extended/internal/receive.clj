@@ -27,9 +27,9 @@
                      :restart-count 0
                      :started-at    (t/now)}
          :queue-url queue-url
-         :in-chan   (sqs/receive-message-channeled sqs-ext-client
-                                                   queue-url
-                                                   receive-opts)
+         :in-chan   (sqs/receive-to-channel sqs-ext-client
+                                            queue-url
+                                            receive-opts)
          :out-chan  out-chan}))
 
 (defn- update-receive-loop-stats
@@ -66,9 +66,9 @@
            (fn [state]
              (-> state
                  (assoc :in-chan
-                        (sqs/receive-message-channeled sqs-ext-client
-                                                       (:queue-url @loop-state)
-                                                       receive-opts))
+                        (sqs/receive-to-channel sqs-ext-client
+                                                (:queue-url @loop-state)
+                                                receive-opts))
                  (update-in [:stats :restart-count] inc)
                  (assoc-in [:stats :restarted-at] (t/now)))))
     (close! old-in-chan)))
