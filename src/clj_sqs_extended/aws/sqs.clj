@@ -1,5 +1,5 @@
 (ns clj-sqs-extended.aws.sqs
-  (:require [clojure.core.async :refer [chan go-loop <! >!]]
+  (:require [clojure.core.async :as async :refer [chan go >!]]
             [clojure.core.async.impl.protocols :as async-protocols]
             [clj-sqs-extended.aws.configuration :as aws]
             [clj-sqs-extended.aws.s3 :as s3]
@@ -236,14 +236,19 @@
 
 (defn receive-to-channel
   [sqs-client queue-url opts]
-  (let [ch (chan)]
-    (go-loop []
+  (let [ch (chan 10)]
+    (go
       (try
-        (some->> (receive-message sqs-client queue-url opts)
-                 (>! ch))
+        (loop []
+          (some->> (receive-message sqs-client queue-url opts)
+                   (>! ch))
+          (when-not (async-protocols/closed? ch)
+            (recur)))
         (catch Throwable e
           (>! ch e)))
-      (when-not (async-protocols/closed? ch)
-        (recur)))
+
+      ;; before exiting go-loop
+      (async/close! ch))
+
     ch))
 
