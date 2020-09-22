@@ -162,10 +162,10 @@
   (testing "handle-queue terminates when the restart-count exceeds the limit"
     (let [handler-chan (chan)]
       (fixtures/with-test-standard-queue
-        ;; WATCHOUT: We redefine receive-message to permanently cause an error to be handled,
+        ;; WATCHOUT: We redefine receive-messages to permanently cause an error to be handled,
         ;;           which is recoverable by restarting and should cause the loop to be restarted
         ;;           by an amount of times that fits the restart-limit and delay settings.
-        (with-redefs-fn {#'sqs/receive-message
+        (with-redefs-fn {#'sqs/receive-messages
                          (fn [_ _ _] (HttpTimeoutException.
                                        "Testing permanent network failure"))}
           #(let [restart-limit 3
@@ -183,20 +183,20 @@
 (deftest handle-queue-restarts-if-recoverable-errors-occurs
   (testing "handle-queue restarts properly and continues running upon recoverable error"
     (let [handler-chan (chan)
-          receive-message sqs/receive-message
+          receive-messages sqs/receive-messages
           called-counter (atom 0)]
       (fixtures/with-test-standard-queue
-        ;; WATCHOUT: To test a temporary error, we redefine receive-message to throw
+        ;; WATCHOUT: To test a temporary error, we redefine receive-messages to throw
         ;;           an error once and afterwards do what the original function did,
         ;;           which we saved previously:
-        (with-redefs-fn {#'sqs/receive-message
+        (with-redefs-fn {#'sqs/receive-messages
                          (fn [_ _ _]
                            (swap! called-counter inc)
                            (if (= @called-counter 1)
                              (HttpTimeoutException. "Testing temporary network failure")
-                             (receive-message @fixtures/test-sqs-ext-client
-                                              @fixtures/test-queue-url
-                                              {})))}
+                             (receive-messages @fixtures/test-sqs-ext-client
+                                               @fixtures/test-queue-url
+                                               {})))}
           #(let [restart-delay-seconds 1
                  stop-fn (fixtures/with-handle-queue
                            handler-chan
@@ -221,9 +221,9 @@
   (testing "handle-queue terminates when an error occured that was considered fatal/unrecoverable"
     (let [handler-chan (chan)]
       (fixtures/with-test-standard-queue
-        ;; WATCHOUT: We redefine receive-message to permanently cause an error to be handled,
+        ;; WATCHOUT: We redefine receive-messages to permanently cause an error to be handled,
         ;;           which is not recoverable by restarting and therefore terminates the loop.
-        (with-redefs-fn {#'sqs/receive-message
+        (with-redefs-fn {#'sqs/receive-messages
                          (fn [_ _ _]
                            (RuntimeException. "Testing runtime error"))}
           #(let [stats (fixtures/with-handle-queue-defaults

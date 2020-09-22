@@ -17,8 +17,8 @@
 (deftest can-receive-message-when-idle
   (testing "Receive empty response when no message has been send before"
     (fixtures/with-test-standard-queue
-      (let [response (sqs/receive-message @fixtures/test-sqs-ext-client
-                                          @fixtures/test-queue-url)]
+      (let [response (sqs/receive-messages @fixtures/test-sqs-ext-client
+                                           @fixtures/test-queue-url)]
         (is (empty? response))))))
 
 (deftest can-receive-message
@@ -30,22 +30,22 @@
                      (sqs/send-message @fixtures/test-sqs-ext-client
                                        @fixtures/test-queue-url
                                        test-message {:format format}))
-          (let [response (sqs/receive-message @fixtures/test-sqs-ext-client
-                                              @fixtures/test-queue-url)]
-            (is (= test-message (:body response)))))))))
+          (let [response (sqs/receive-messages @fixtures/test-sqs-ext-client
+                                               @fixtures/test-queue-url)]
+            (is (= [test-message] (map :body response)))))))))
 
 (deftest safely-receive-nil-message
-  ;; sqs/wait-and-receive-one-message-from-sqs returns an empty list when
+  ;; sqs/wait-and-receive-messages-from-sqs returns an empty list when
   ;; WaitTimeSeconds is reached
   ;;
   ;; Reference:
   ;; See WaitTimeSeconds section in
   ;; https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_ReceiveMessage.html#API_ReceiveMessage_ResponseElements
   (fixtures/with-test-standard-queue
-    (bond/with-stub! [[sqs/wait-and-receive-one-message-from-sqs (constantly nil)]]
+    (bond/with-stub! [[sqs/wait-and-receive-messages-from-sqs (constantly [])]]
       ;; ensure that this doesn't crash
-      (is (nil? (sqs/receive-message @fixtures/test-sqs-ext-client
-                                     @fixtures/test-queue-url))))))
+      (is (empty? (sqs/receive-messages @fixtures/test-sqs-ext-client
+                                        @fixtures/test-queue-url))))))
 
 (deftest can-receive-fifo-messages
   (testing "Receiving multiple messages from FIFO queue in correct order"
@@ -58,9 +58,9 @@
                                  (helpers/random-group-id)
                                  {:format format}))
         (doseq [test-message test-messages]
-          (let [response (sqs/receive-message @fixtures/test-sqs-ext-client
-                                              @fixtures/test-queue-url)]
-            (is (= test-message (:body response)))))))))
+          (let [response (sqs/receive-messages @fixtures/test-sqs-ext-client
+                                               @fixtures/test-queue-url)]
+            (is (= [test-message] (map :body response)))))))))
 
 (deftest can-send-message-larger-than-256kb
   (testing "Sending a message with more than 256kb of data (via S3 bucket) in raw format"
@@ -68,9 +68,9 @@
       (sqs/send-message @fixtures/test-sqs-ext-client
                         @fixtures/test-queue-url
                         test-message-larger-than-256kb)
-      (let [response (sqs/receive-message @fixtures/test-sqs-ext-client
-                                          @fixtures/test-queue-url)]
-        (is (= test-message-larger-than-256kb (:body response)))))))
+      (let [response (sqs/receive-messages @fixtures/test-sqs-ext-client
+                                           @fixtures/test-queue-url)]
+        (is (= [test-message-larger-than-256kb] (map :body response)))))))
 
 (deftest create-queue-request-attributes-attached-correctly
   (testing "Creating a queue create request with single attributes works as expected"
@@ -88,3 +88,4 @@
      (is (= (.getAttributes test-request)
             {"KmsMasterKeyId"               "UnbreakableMasterKey"
              "KmsDataKeyReusePeriodSeconds" "60"})))))
+
