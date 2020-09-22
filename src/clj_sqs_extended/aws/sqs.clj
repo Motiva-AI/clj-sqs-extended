@@ -183,26 +183,21 @@
           (bean)
           (select-keys [:messageId :receiptHandle :body])))
 
-(defn- receive-only-one-message-request
+(defn- receive-messages-request
   [queue-url wait-time-in-seconds]
   (doto (ReceiveMessageRequest. queue-url)
       (.setWaitTimeSeconds (int wait-time-in-seconds))
       ;; this below is to satisfy some quirk with SQS for our custom serdes-format attribute to be received
       (.setMessageAttributeNames [clj-sqs-ext-format-attribute])
-      ;; this is a design choice to read only one message at a time
-      (.setMaxNumberOfMessages (int 1))))
+      (.setMaxNumberOfMessages (int 10))))
 
-(defn wait-and-receive-one-message-from-sqs
+(defn wait-and-receive-messages-from-sqs
   [sqs-client queue-url wait-time-in-seconds]
-  (->> (receive-only-one-message-request queue-url wait-time-in-seconds)
+  (->> (receive-messages-request queue-url wait-time-in-seconds)
        (.receiveMessage sqs-client)
-       (.getMessages)
-       ;; we're calling (first) here because we've .setMaxNumberOfMessages = 1
-       ;; in the receive-message-request, thus, we can safely assume that
-       ;; there's only one message received up to here.
-       (first)))
+       (.getMessages)))
 
-(defn parse-message
+(defn- parse-message
   [raw-message]
   (let [coll   (extract-relevant-keys-from-message raw-message)
         format (get-serdes-format-attribute raw-message)]
@@ -210,29 +205,31 @@
       (assoc coll :format format)
       coll)))
 
-(defn receive-message
+(defn- deserialize-message-if-formatted
+  [{message-body   :body
+    message-format :format
+    :as message}]
+  (if message-format
+    (->> (serdes/deserialize message-body message-format)
+         (assoc message :body))
+
+    message))
+
+(defn receive-messages
   ([sqs-client queue-url]
-   (receive-message sqs-client queue-url {}))
+   (receive-messages sqs-client queue-url {}))
 
   ([sqs-client queue-url
     {:keys [wait-time-in-seconds]
      ;; Defaults to maximum long polling
      ;; https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-short-and-long-polling.html#sqs-long-polling
      :or   {wait-time-in-seconds 20}}]
-   (let [{message-body   :body
-          message-format :format
-          :as message}
-         (-> (wait-and-receive-one-message-from-sqs
-               sqs-client
-               queue-url
-               wait-time-in-seconds)
-             (parse-message))]
-
-     (if message-format
-       (->> (serdes/deserialize message-body message-format)
-            (assoc message :body))
-
-       message))))
+   (->> (wait-and-receive-messages-from-sqs
+          sqs-client
+          queue-url
+          wait-time-in-seconds)
+        (map parse-message)
+        (map deserialize-message-if-formatted))))
 
 (defn receive-to-channel
   [sqs-client queue-url opts]
@@ -240,8 +237,9 @@
     (go
       (try
         (loop []
-          (some->> (receive-message sqs-client queue-url opts)
-                   (>! ch))
+          (let [messages (receive-messages sqs-client queue-url opts)]
+            (when-not (empty? messages)
+              (async/onto-chan ch messages false)))
           (when-not (async-protocols/closed? ch)
             (recur)))
         (catch Throwable e
