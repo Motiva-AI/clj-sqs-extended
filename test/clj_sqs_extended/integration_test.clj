@@ -17,9 +17,9 @@
 
 (defn wrap-purge-integration-queues
   [f]
-  (f)
   ;; From AWS: Only one PurgeQueue operation is allowed every 60 seconds
-  (sqs-ext/purge-queue! (sqs-ext-config) standard-queue-url))
+  (sqs-ext/purge-queue! (sqs-ext-config) standard-queue-url)
+  (f))
 
 (use-fixtures :once wrap-purge-integration-queues)
 
