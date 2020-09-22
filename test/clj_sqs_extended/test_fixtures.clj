@@ -40,6 +40,7 @@
                                           test-standard-queue-name
                                           opts))
   (f)
+  (Thread/sleep 50) ;; wait for receive-loop to finish in the background
   (sqs-ext/delete-queue! sqs-ext-config
                          @test-queue-url))
 
@@ -59,6 +60,7 @@
           (sqs-ext/create-fifo-queue! sqs-ext-config
                                       test-fifo-queue-name))
   (f)
+  (Thread/sleep 50) ;; wait for receive-loop to finish in the background
   (sqs-ext/delete-queue! sqs-ext-config
                          @test-queue-url))
 
