@@ -367,17 +367,21 @@
                        (-> fixtures/test-handler-fn bond/calls first :args)]
                    (is (not (fn? (last test-handler-fn-args)))))
 
+                 ;; not sure why this is needed, but otherwise the next check
+                 ;; becomes an intermittent fail
+                 (Thread/sleep 50)
+
                  ;; WATCHOUT: With the handler thread redeffed we can now access
                  ;;           the receipt handle of the SQS message and try to
                  ;;           delete the message manually. If the message was
                  ;;           auto-deleted by the core API before this should
                  ;;           yield an AmazonSQSException:
                  (is (thrown-with-msg?
-                      AmazonSQSException
-                      #"^.*Service: AmazonSQS; Status Code: 400;.*$"
-                      (sqs-ext/delete-message! fixtures/sqs-ext-config
-                                               @fixtures/test-queue-url
-                                               received-message)))))))
+                       AmazonSQSException
+                       #"^.*Service: AmazonSQS; Status Code: 400;.*$"
+                       (sqs-ext/delete-message! fixtures/sqs-ext-config
+                                                @fixtures/test-queue-url
+                                                received-message)))))))
 
         (close! handler-chan)))))
 
