@@ -67,11 +67,17 @@
         (fixtures/with-handle-queue-defaults
           handler-chan
 
-          (testing "handle-queue can send/receive basic message to standard queue"
+          (testing "handle-queue can send/receive basic messages to standard queue"
             (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
                                                @fixtures/test-queue-url
                                                (first test-messages-basic)
                                                {:format format})))
+            (is (= (first test-messages-basic) (<!! handler-chan)))
+
+            (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
+                                                 @fixtures/test-queue-url
+                                                 (first test-messages-basic)
+                                                 {:format format})))
             (is (= (first test-messages-basic) (<!! handler-chan))))
 
           (testing "handle-queue can send/receive large message to standard queue"
