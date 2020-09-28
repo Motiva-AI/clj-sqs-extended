@@ -182,7 +182,7 @@
                                              :restart-delay-seconds restart-delay-seconds}})]
              (Thread/sleep (+ (* restart-limit (* restart-delay-seconds 1000)) 500))
              (let [stats (stop-fn)]
-               (is (= (:restart-count stats) restart-limit))))))
+               (is (= restart-limit (:restart-count stats)))))))
       (close! handler-chan))))
 
 (deftest handle-queue-restarts-if-recoverable-errors-occurs
