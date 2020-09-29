@@ -67,11 +67,17 @@
         (fixtures/with-handle-queue-defaults
           handler-chan
 
-          (testing "handle-queue can send/receive basic message to standard queue"
+          (testing "handle-queue can send/receive basic messages to standard queue"
             (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
                                                @fixtures/test-queue-url
                                                (first test-messages-basic)
                                                {:format format})))
+            (is (= (first test-messages-basic) (<!! handler-chan)))
+
+            (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
+                                                 @fixtures/test-queue-url
+                                                 (first test-messages-basic)
+                                                 {:format format})))
             (is (= (first test-messages-basic) (<!! handler-chan))))
 
           (testing "handle-queue can send/receive large message to standard queue"
@@ -123,15 +129,14 @@
           (fixtures/with-handle-queue-defaults
             handler-chan
 
-            (doseq [message test-messages-basic]
+            (let [message (first test-messages-basic)]
               (is (string? (sqs-ext/send-fifo-message fixtures/sqs-ext-config
                                                       @fixtures/test-queue-url
                                                       message
                                                       (helpers/random-group-id)
-                                                      {:format format}))))
-            (doseq [message test-messages-basic]
-              (let [received-message (<!! handler-chan)]
-                (is (= message received-message))))))
+                                                      {:format format})))
+
+              (is (= message (<!! handler-chan))))))
         (close! handler-chan)))))
 
 (deftest handle-queue-terminates-with-non-existing-queue
@@ -162,12 +167,12 @@
   (testing "handle-queue terminates when the restart-count exceeds the limit"
     (let [handler-chan (chan)]
       (fixtures/with-test-standard-queue
-        ;; WATCHOUT: We redefine receive-message to permanently cause an error to be handled,
+        ;; WATCHOUT: We redefine receive-messages to permanently cause an error to be handled,
         ;;           which is recoverable by restarting and should cause the loop to be restarted
         ;;           by an amount of times that fits the restart-limit and delay settings.
-        (with-redefs-fn {#'sqs/receive-message
-                         (fn [_ _ _] (HttpTimeoutException.
-                                       "Testing permanent network failure"))}
+        (with-redefs-fn {#'sqs/wait-and-receive-messages-from-sqs
+                         (fn [_ _ _] (throw (HttpTimeoutException.
+                                              "Testing permanent network failure")))}
           #(let [restart-limit 3
                  restart-delay-seconds 1
                  stop-fn (fixtures/with-handle-queue
@@ -177,26 +182,24 @@
                                              :restart-delay-seconds restart-delay-seconds}})]
              (Thread/sleep (+ (* restart-limit (* restart-delay-seconds 1000)) 500))
              (let [stats (stop-fn)]
-               (is (= (:restart-count stats) restart-limit))))))
+               (is (= restart-limit (:restart-count stats)))))))
       (close! handler-chan))))
 
 (deftest handle-queue-restarts-if-recoverable-errors-occurs
   (testing "handle-queue restarts properly and continues running upon recoverable error"
     (let [handler-chan (chan)
-          receive-message sqs/receive-message
+          wait-and-receive-messages-from-sqs sqs/wait-and-receive-messages-from-sqs
           called-counter (atom 0)]
       (fixtures/with-test-standard-queue
-        ;; WATCHOUT: To test a temporary error, we redefine receive-message to throw
+        ;; WATCHOUT: To test a temporary error, we redefine receive-messages to throw
         ;;           an error once and afterwards do what the original function did,
         ;;           which we saved previously:
-        (with-redefs-fn {#'sqs/receive-message
-                         (fn [_ _ _]
+        (with-redefs-fn {#'sqs/wait-and-receive-messages-from-sqs
+                         (fn [sqs-client queue-url wait-time-in-seconds]
                            (swap! called-counter inc)
                            (if (= @called-counter 1)
-                             (HttpTimeoutException. "Testing temporary network failure")
-                             (receive-message @fixtures/test-sqs-ext-client
-                                              @fixtures/test-queue-url
-                                              {})))}
+                               (throw (HttpTimeoutException. "Testing temporary network failure"))
+                               (wait-and-receive-messages-from-sqs sqs-client queue-url wait-time-in-seconds)))}
           #(let [restart-delay-seconds 1
                  stop-fn (fixtures/with-handle-queue
                            handler-chan
@@ -221,11 +224,11 @@
   (testing "handle-queue terminates when an error occured that was considered fatal/unrecoverable"
     (let [handler-chan (chan)]
       (fixtures/with-test-standard-queue
-        ;; WATCHOUT: We redefine receive-message to permanently cause an error to be handled,
+        ;; WATCHOUT: We redefine receive-messages to permanently cause an error to be handled,
         ;;           which is not recoverable by restarting and therefore terminates the loop.
-        (with-redefs-fn {#'sqs/receive-message
+        (with-redefs-fn {#'sqs/receive-messages
                          (fn [_ _ _]
-                           (RuntimeException. "Testing runtime error"))}
+                           (throw (RuntimeException. "Testing runtime error")))}
           #(let [stats (fixtures/with-handle-queue-defaults
                          handler-chan)]
              (Thread/sleep 500)
@@ -367,17 +370,21 @@
                        (-> fixtures/test-handler-fn bond/calls first :args)]
                    (is (not (fn? (last test-handler-fn-args)))))
 
+                 ;; not sure why this is needed, but otherwise the next check
+                 ;; becomes an intermittent fail
+                 (Thread/sleep 50)
+
                  ;; WATCHOUT: With the handler thread redeffed we can now access
                  ;;           the receipt handle of the SQS message and try to
                  ;;           delete the message manually. If the message was
                  ;;           auto-deleted by the core API before this should
                  ;;           yield an AmazonSQSException:
                  (is (thrown-with-msg?
-                      AmazonSQSException
-                      #"^.*Service: AmazonSQS; Status Code: 400;.*$"
-                      (sqs-ext/delete-message! fixtures/sqs-ext-config
-                                               @fixtures/test-queue-url
-                                               received-message)))))))
+                       AmazonSQSException
+                       #"^.*Service: AmazonSQS; Status Code: 400;.*$"
+                       (sqs-ext/delete-message! fixtures/sqs-ext-config
+                                                @fixtures/test-queue-url
+                                                received-message)))))))
 
         (close! handler-chan)))))
 

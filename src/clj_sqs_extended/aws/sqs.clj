@@ -1,5 +1,5 @@
 (ns clj-sqs-extended.aws.sqs
-  (:require [clojure.core.async :refer [chan go-loop <! >!]]
+  (:require [clojure.core.async :as async :refer [chan go >!]]
             [clojure.core.async.impl.protocols :as async-protocols]
             [clj-sqs-extended.aws.configuration :as aws]
             [clj-sqs-extended.aws.s3 :as s3]
@@ -183,26 +183,23 @@
           (bean)
           (select-keys [:messageId :receiptHandle :body])))
 
-(defn- receive-only-one-message-request
+(def ^:private max-number-of-receiving-messages (int 10))
+
+(defn- receive-messages-request
   [queue-url wait-time-in-seconds]
   (doto (ReceiveMessageRequest. queue-url)
       (.setWaitTimeSeconds (int wait-time-in-seconds))
       ;; this below is to satisfy some quirk with SQS for our custom serdes-format attribute to be received
       (.setMessageAttributeNames [clj-sqs-ext-format-attribute])
-      ;; this is a design choice to read only one message at a time
-      (.setMaxNumberOfMessages (int 1))))
+      (.setMaxNumberOfMessages max-number-of-receiving-messages)))
 
-(defn wait-and-receive-one-message-from-sqs
+(defn wait-and-receive-messages-from-sqs
   [sqs-client queue-url wait-time-in-seconds]
-  (->> (receive-only-one-message-request queue-url wait-time-in-seconds)
+  (->> (receive-messages-request queue-url wait-time-in-seconds)
        (.receiveMessage sqs-client)
-       (.getMessages)
-       ;; we're calling (first) here because we've .setMaxNumberOfMessages = 1
-       ;; in the receive-message-request, thus, we can safely assume that
-       ;; there's only one message received up to here.
-       (first)))
+       (.getMessages)))
 
-(defn parse-message
+(defn- parse-message
   [raw-message]
   (let [coll   (extract-relevant-keys-from-message raw-message)
         format (get-serdes-format-attribute raw-message)]
@@ -210,68 +207,48 @@
       (assoc coll :format format)
       coll)))
 
-(defn receive-message
+(defn- deserialize-message-if-formatted
+  [{message-body   :body
+    message-format :format
+    :as message}]
+  (if message-format
+    (->> (serdes/deserialize message-body message-format)
+         (assoc message :body))
+
+    message))
+
+(defn receive-messages
   ([sqs-client queue-url]
-   (receive-message sqs-client queue-url {}))
+   (receive-messages sqs-client queue-url {}))
 
   ([sqs-client queue-url
     {:keys [wait-time-in-seconds]
      ;; Defaults to maximum long polling
      ;; https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-short-and-long-polling.html#sqs-long-polling
      :or   {wait-time-in-seconds 20}}]
-   (let [{message-body   :body
-          message-format :format
-          :as message}
-         (-> (wait-and-receive-one-message-from-sqs
-               sqs-client
-               queue-url
-               wait-time-in-seconds)
-             (parse-message))]
+   (->> (wait-and-receive-messages-from-sqs
+          sqs-client
+          queue-url
+          wait-time-in-seconds)
+        (map parse-message)
+        (map deserialize-message-if-formatted))))
 
-     (if message-format
-       (->> (serdes/deserialize message-body message-format)
-            (assoc message :body))
-
-       message))))
-
-(defn- receive-to-channel
+(defn receive-to-channel
   [sqs-client queue-url opts]
-  (let [ch (chan)]
-    (go-loop []
+  (let [ch (chan max-number-of-receiving-messages)]
+    (go
       (try
-        (some->> (receive-message sqs-client queue-url opts)
-                 (>! ch))
+        (loop []
+          (let [messages (receive-messages sqs-client queue-url opts)]
+            (when-not (empty? messages)
+              (async/onto-chan ch messages false)))
+          (when-not (async-protocols/closed? ch)
+            (recur)))
         (catch Throwable e
           (>! ch e)))
-      (when-not (async-protocols/closed? ch)
-        (recur)))
+
+      ;; before exiting go-loop
+      (async/close! ch))
+
     ch))
 
-(defn- multiplex
-  [chs]
-  (let [ch (chan)]
-    (doseq [c chs]
-      (go-loop []
-        (let [v (<! c)]
-          (>! ch v)
-          (when (some? v)
-            (recur)))))
-    ch))
-
-(defn receive-message-channeled
-  ([sqs-client queue-url]
-   (receive-message-channeled sqs-client queue-url {}))
-
-  ([sqs-client queue-url
-    {:keys [num-consumers]
-     :or   {num-consumers 1}
-     :as   opts}]
-   (if (= num-consumers 1)
-     (receive-to-channel sqs-client queue-url opts)
-     (multiplex
-       (loop [chs []
-              n num-consumers]
-         (if (= n 0)
-           chs
-           (let [ch (receive-to-channel sqs-client queue-url opts)]
-             (recur (conj chs ch) (dec n)))))))))
