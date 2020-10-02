@@ -55,8 +55,12 @@
   (:stats @loop-state))
 
 (defn- restart-receive-loop
-  [sqs-ext-client queue-url loop-state receive-opts]
-  (log/infof "Restarting receive-loop for queue '%s' ..." queue-url)
+  [sqs-ext-client queue-url restart-delay-seconds loop-state receive-opts]
+  (log/infof "Waiting %d seconds and then restarting receive-loop for queue '%s' ..."
+             restart-delay-seconds
+             queue-url)
+  (Thread/sleep (* 1000 restart-delay-seconds))
+
   (let [old-in-chan (:in-chan @loop-state)]
     (swap! loop-state
            (fn [state]
@@ -72,35 +76,15 @@
   (> (get-in @loop-state [:stats :restart-count])
      limit))
 
-(def ^:private restart-limit-not-reached?
-  (complement restart-limit-reached?))
+(defn- raise-receive-loop-error [queue-url error]
+  (throw (ex-info
+           (format "receive-loop for queue '%s' failed." queue-url)
+           {:error error})))
 
-(defn- handle-message-receival-error
-  [sqs-ext-client queue-url loop-state error restart-delay-seconds receive-opts]
-  (let [restart-limit (:restart-limit receive-opts)]
-    (letfn [(raise-error []
-              (throw (ex-info
-                       (format "receive-loop for queue '%s' failed." queue-url)
-                       {:error error})))]
-
-      (cond
-        (and (error-might-be-recovered-by-restarting? error)
-             (restart-limit-not-reached? loop-state restart-limit))
-        (do
-          (Thread/sleep (* 1000 restart-delay-seconds))
-          (log/infof "Restarting receive-loop to recover from error: '%s'"
-                     (.getMessage error))
-          (restart-receive-loop sqs-ext-client
-                                queue-url
-                                loop-state
-                                receive-opts))
-
-        (and (error-might-be-recovered-by-restarting? error)
-             (restart-limit-reached? loop-state restart-limit))
-        (raise-error)
-
-        (not (error-might-be-recovered-by-restarting? error))
-        (raise-error)))))
+(defn message-receival-error-safe-to-continue?
+  [error loop-state {restart-limit :restart-limit}]
+  (and (error-might-be-recovered-by-restarting? error)
+       (not (restart-limit-reached? loop-state restart-limit))))
 
 (defn- put-message-to-out-chan-and-maybe-delete
   [{sqs-ext-client :sqs-ext-client
@@ -141,12 +125,18 @@
            (stop-receive-loop queue-url out-chan loop-state)
 
            (instance? Throwable message)
-           (handle-message-receival-error sqs-ext-client
-                                          queue-url
-                                          loop-state
-                                          message
-                                          restart-delay-seconds
-                                          receive-opts)
+           (let [error message]
+             (if (message-receival-error-safe-to-continue? error loop-state receive-opts)
+               (do
+                 (log/infof "Restarting receive-loop to recover from error: '%s'"
+                            (.getMessage error))
+                 (restart-receive-loop sqs-ext-client
+                                       queue-url
+                                       restart-delay-seconds
+                                       loop-state
+                                       receive-opts))
+
+               (raise-receive-loop-error queue-url error)))
 
            (seq message)
            (put-message-to-out-chan-and-maybe-delete
