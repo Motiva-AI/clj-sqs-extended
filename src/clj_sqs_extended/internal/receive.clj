@@ -20,7 +20,7 @@
   (t/seconds (t/between t1 t2)))
 
 (defn- init-receive-loop-state
-  [sqs-ext-client queue-url receive-opts out-chan]
+  [sqs-ext-client queue-url receive-opts]
   (log/debugf "Initializing new receive-loop state for queue '%s' ..." queue-url)
   (atom {:running   true
          :stats     {:iteration     0
@@ -29,8 +29,7 @@
          :queue-url queue-url
          :in-chan   (sqs/receive-to-channel sqs-ext-client
                                             queue-url
-                                            receive-opts)
-         :out-chan  out-chan}))
+                                            receive-opts)}))
 
 (defn- update-receive-loop-stats
   [loop-state]
@@ -47,14 +46,14 @@
         (assoc-in [:stats :last-iteration-started-at] now))))
 
 (defn- stop-receive-loop
-  [loop-state]
+  [out-chan loop-state]
   (when (:running @loop-state)
     (log/debugf "Terminating receive-loop for queue '%s' ..."
                 (:queue-url @loop-state))
     (swap! loop-state assoc :running false)
     (swap! loop-state assoc-in [:stats :stopped-at] (t/now))
     (close! (:in-chan @loop-state))
-    (close! (:out-chan @loop-state)))
+    (close! out-chan))
   (:stats @loop-state))
 
 (defn- restart-receive-loop
@@ -139,15 +138,14 @@
      :as   receive-opts}]
    (let [loop-state (init-receive-loop-state sqs-ext-client
                                              queue-url
-                                             receive-opts
-                                             out-chan)]
+                                             receive-opts)]
      (go-loop []
        (swap! loop-state update-receive-loop-stats)
 
        (let [message (<! (:in-chan @loop-state))]
          (cond
            (nil? message)
-           (stop-receive-loop loop-state)
+           (stop-receive-loop out-chan loop-state)
 
            (instance? Throwable message)
            (handle-message-receival-error sqs-ext-client
@@ -170,4 +168,4 @@
                     queue-url
                     (:stats @loop-state))))
 
-     (partial stop-receive-loop loop-state))))
+     (partial stop-receive-loop out-chan loop-state))))
