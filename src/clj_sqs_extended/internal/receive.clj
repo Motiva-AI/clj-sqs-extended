@@ -8,7 +8,6 @@
             UnknownHostException]
            [java.net.http HttpTimeoutException]))
 
-
 (defn error-might-be-recovered-by-restarting?
   [error]
   (contains? #{UnknownHostException
@@ -19,57 +18,33 @@
   [t1 t2]
   (t/seconds (t/between t1 t2)))
 
-(defn- init-receive-loop-state
-  [sqs-ext-client queue-url receive-opts]
-  (log/debugf "Initializing new receive-loop state for queue '%s' ..." queue-url)
-  (atom {:running   true
-         :stats     {:iteration     0
-                     :restart-count 0
-                     :started-at    (t/now)}
-         :in-chan   (sqs/receive-to-channel sqs-ext-client
-                                            queue-url
-                                            receive-opts)}))
+(defn- init-receive-loop-stats []
+  {:iteration     0
+   :restart-count 0
+   :started-at    (t/now)})
 
-(defn- update-receive-loop-stats
-  [loop-state]
+(defn- update-receive-loop-stats [loop-stats]
   (let [now (t/now)]
-    (-> loop-state
-        (update-in [:stats :iteration] inc)
+    (-> loop-stats
+        (update :iteration inc)
         ;; ensure that :last-loop-duration-in-seconds is updated before
         ;; updating :last-iteration-started-at
-        (assoc-in [:stats :last-loop-duration-in-seconds]
-                  (seconds-between
-                    (or (-> loop-state :stats :last-iteration-started-at)
-                        (-> loop-state :stats :started-at))
-                    now))
-        (assoc-in [:stats :last-iteration-started-at] now))))
+        (assoc :last-loop-duration-in-seconds
+               (seconds-between
+                 (or (-> loop-stats :last-iteration-started-at)
+                     (-> loop-stats :started-at))
+                 now))
+        (assoc :last-iteration-started-at now))))
 
-(defn- stop-receive-loop
-  [queue-url out-chan loop-state]
-  (when (:running @loop-state)
-    (log/debugf "Terminating receive-loop for queue '%s' ..." queue-url)
-    (swap! loop-state assoc :running false)
-    (swap! loop-state assoc-in [:stats :stopped-at] (t/now))
-    (close! (:in-chan @loop-state))
-    (close! out-chan))
-  (:stats @loop-state))
+(defn- stop-receive-loop!
+  [receive-loop-running?]
+  (reset! receive-loop-running? false))
 
-(defn- restart-receive-loop
-  [sqs-ext-client queue-url restart-delay-seconds loop-state receive-opts]
-  (log/infof "Waiting %d seconds and then restarting receive-loop for queue '%s' ..."
-             restart-delay-seconds
-             queue-url)
-  (Thread/sleep (* 1000 restart-delay-seconds))
-
-  (let [old-in-chan (:in-chan @loop-state)]
-    (swap! loop-state
-           (fn [state]
-             (-> state
-                 (assoc :in-chan
-                        (sqs/receive-to-channel sqs-ext-client queue-url receive-opts))
-                 (update-in [:stats :restart-count] inc)
-                 (assoc-in [:stats :restarted-at] (t/now)))))
-    (close! old-in-chan)))
+(defn- loop-stats-increment-restart-count
+  [loop-state]
+  (-> loop-state
+      (update :restart-count inc)
+      (assoc :restarted-at (t/now))))
 
 (defn- restart-limit-reached?
   [loop-state limit]
@@ -85,20 +60,6 @@
   [error loop-state {restart-limit :restart-limit}]
   (and (error-might-be-recovered-by-restarting? error)
        (not (restart-limit-reached? loop-state restart-limit))))
-
-(defn handle-message-receival-error
-  [sqs-ext-client queue-url loop-state error restart-delay-seconds receive-opts]
-  (if (message-receival-error-safe-to-continue? error loop-state receive-opts)
-    (do
-      (log/infof "Restarting receive-loop to recover from error: '%s'"
-                 (.getMessage error))
-      (restart-receive-loop sqs-ext-client
-                            queue-url
-                            restart-delay-seconds
-                            loop-state
-                            receive-opts))
-
-    (raise-receive-loop-error queue-url error)))
 
 (defn- put-message-to-out-chan-and-maybe-delete
   [{sqs-ext-client :sqs-ext-client
@@ -119,6 +80,13 @@
     (when auto-delete?
       (done-fn))))
 
+(defn exit-receive-loop
+  [queue-url receiving-chan out-chan loop-stats]
+  (log/infof "Receive-loop terminated for %s, stats: %s" queue-url loop-stats)
+  (close! receiving-chan)
+  (close! out-chan)
+  loop-stats)
+
 (defn receive-loop
   ([sqs-ext-client queue-url out-chan]
    (receive-loop sqs-ext-client queue-url out-chan {}))
@@ -127,25 +95,34 @@
     {:keys [auto-delete
             restart-delay-seconds]
      :as   receive-opts}]
-   (let [loop-state (init-receive-loop-state sqs-ext-client
-                                             queue-url
-                                             receive-opts)]
-     (go-loop []
-       (swap! loop-state update-receive-loop-stats)
-
-       (let [message (<! (:in-chan @loop-state))]
+   (let [receive-loop-running? (atom true)]
+     (go-loop [loop-stats     (init-receive-loop-stats)
+               receiving-chan (sqs/receive-to-channel sqs-ext-client
+                                                      queue-url
+                                                      receive-opts)]
+       (let [message (<! receiving-chan)]
          (cond
            (nil? message)
-           (stop-receive-loop queue-url out-chan loop-state)
+           (stop-receive-loop! receive-loop-running?)
 
            (instance? Throwable message)
-           (handle-message-receival-error
-             sqs-ext-client
-             queue-url
-             loop-state
-             message
-             restart-delay-seconds
-             receive-opts)
+           ;; refactor out this handle-message-receival-error block
+           (if (message-receival-error-safe-to-continue? message loop-stats receive-opts)
+             (do
+               (log/infof "Recovering from error '%s'... Waiting %d seconds and then restarting receive-loop for queue '%s' ..."
+                          (.getMessage message)
+                          restart-delay-seconds
+                          queue-url)
+               (Thread/sleep (* 1000 restart-delay-seconds))
+
+               (close! receiving-chan)
+               (recur (loop-stats-increment-restart-count loop-stats)
+                      (sqs/receive-to-channel sqs-ext-client
+                                              queue-url
+                                              receive-opts)))
+
+             (raise-receive-loop-error queue-url message))
+
 
            (seq message)
            (put-message-to-out-chan-and-maybe-delete
@@ -155,10 +132,9 @@
               :message        message
               :auto-delete?   auto-delete})))
 
-       (if (:running @loop-state)
-         (recur)
-         (log/infof "Receive-loop terminated for %s, stats: %s"
-                    queue-url
-                    (:stats @loop-state))))
+       (if @receive-loop-running?
+         (recur (update-receive-loop-stats loop-stats) receiving-chan)
 
-     (partial stop-receive-loop queue-url out-chan loop-state))))
+         (exit-receive-loop queue-url receiving-chan out-chan loop-stats)))
+
+     (partial stop-receive-loop! receive-loop-running?))))
