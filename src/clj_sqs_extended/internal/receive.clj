@@ -108,21 +108,25 @@
         (not (error-might-be-recovered-by-restarting? error))
         (raise-error)))))
 
-(defn- process-message
-  [sqs-ext-client loop-state message auto-delete]
+(defn- put-message-to-out-chan-and-maybe-delete
+  [{sqs-ext-client :sqs-ext-client
+    queue-url      :queue-url
+    message        :message
+    out-chan       :out-chan
+    auto-delete?   :auto-delete?}]
   (let [done-fn #(sqs/delete-message! sqs-ext-client
-                                      (:queue-url @loop-state)
+                                      queue-url
                                       message)
         msg (cond-> message
-                    (not auto-delete) (assoc :done-fn done-fn))]
+              (not auto-delete?) (assoc :done-fn done-fn))]
     (if (:body message)
-      (>!! (:out-chan @loop-state) msg)
+      (>!! out-chan msg)
 
       (log/infof "Queue '%s' received a nil (:body message), message: %s"
-                 (:queue-url @loop-state)
+                 queue-url
                  message))
 
-    (when auto-delete
+    (when auto-delete?
       (done-fn))))
 
 (defn receive-loop
@@ -153,10 +157,12 @@
                                           receive-opts)
 
            (seq message)
-           (process-message sqs-ext-client
-                            loop-state
-                            message
-                            auto-delete)))
+           (put-message-to-out-chan-and-maybe-delete
+             {:sqs-ext-client sqs-ext-client
+              :queue-url      queue-url
+              :out-chan       out-chan
+              :message        message
+              :auto-delete?   auto-delete})))
 
        (if (:running @loop-state)
          (recur)
