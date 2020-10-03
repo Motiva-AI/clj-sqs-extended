@@ -79,11 +79,16 @@
                 (not auto-delete?) (assoc :done-fn done-fn))]
       (if (:body message)
         (when-not (>!! out-chan msg)
+          ;; TODO refactor this fn's logic so that we don't need to throw an exception to stop auto-delete
+
+          ;; throwing an exception here to stop the process so that we don't
+          ;; delete the current received message without putting it to out-chan
           (throw (ex-info
                    (format "Failed to put message to out-chan because the channel is closed already. Queue %s"
                            queue-url)
                    {})))
 
+        ;; Question: do we need to delete a nil message?
         (log/infof "Queue '%s' received a nil (:body message), message: %s"
                    queue-url
                    message))
