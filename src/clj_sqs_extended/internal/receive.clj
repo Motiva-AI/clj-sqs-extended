@@ -87,6 +87,18 @@
       (when auto-delete?
         (done-fn)))))
 
+(defn pause-to-recover-this-loop
+  [queue-url
+   ^clojure.lang.Atom paused-for-error?
+   restart-delay-seconds
+   error]
+  (log/infof "Recovering from error '%s'... Waiting [%d] seconds before continuing receive-loop for queue '%s' ..."
+             (.getMessage error)
+             restart-delay-seconds
+             queue-url)
+  (reset! paused-for-error? true)
+  (Thread/sleep (* 1000 restart-delay-seconds)))
+
 (defn- handle-message-exception-and-maybe-pause-this-loop
   [queue-url
    loop-stats
@@ -97,19 +109,16 @@
    ;; TODO rename these to pause-*
    {restart-delay-seconds :restart-delay-seconds
     restart-limit         :restart-limit}
-   message]
-  (if-not (message-receival-error-safe-to-continue? loop-stats restart-limit message)
+   error]
+  (if-not (message-receival-error-safe-to-continue? loop-stats restart-limit error)
     (do
       (stop-receive-loop! queue-url receiving-chan out-chan receive-loop-running?)
-      (raise-receive-loop-error queue-url message))
+      (raise-receive-loop-error queue-url error))
 
-    (do
-      (log/infof "Recovering from error '%s'... Waiting [%d] seconds before continuing receive-loop for queue '%s' ..."
-                 (.getMessage message)
-                 restart-delay-seconds
-                 queue-url)
-      (reset! paused-for-error? true)
-      (Thread/sleep (* 1000 restart-delay-seconds)))))
+    (pause-to-recover-this-loop queue-url
+                                paused-for-error?
+                                restart-delay-seconds
+                                error)))
 
 (defn handle-unexpected-message
   [queue-url
