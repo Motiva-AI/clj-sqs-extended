@@ -24,7 +24,7 @@
    :started-at    (t/now)})
 
 (defn- update-receive-loop-stats
-  [loop-stats paused-for-error?]
+  [loop-stats pause-and-restart-for-error?]
   (let [now (t/now)]
     (-> loop-stats
         (update :iteration inc)
@@ -37,7 +37,7 @@
                  now))
         (assoc :last-iteration-started-at now)
 
-        (cond-> paused-for-error? (update :restart-count inc)))))
+        (cond-> pause-and-restart-for-error? (update :restart-count inc)))))
 
 (defn stop-receive-loop!
   [queue-url out-chan ^clojure.lang.Atom receive-loop-running?]
@@ -94,14 +94,14 @@
 
 (defn pause-to-recover-this-loop
   [queue-url
-   ^clojure.lang.Atom paused-for-error?
+   ^clojure.lang.Atom pause-and-restart-for-error?
    restart-delay-seconds
    error]
   (log/infof "Recovering from error '%s'... Waiting [%d] seconds before continuing receive-loop for queue '%s' ..."
              (.getMessage error)
              restart-delay-seconds
              queue-url)
-  (reset! paused-for-error? true)
+  (reset! pause-and-restart-for-error? true)
   (Thread/sleep (* 1000 restart-delay-seconds)))
 
 (defn- handle-message-exception-and-maybe-pause-this-loop
@@ -109,8 +109,7 @@
    loop-stats
    out-chan
    ^clojure.lang.Atom receive-loop-running?
-   ^clojure.lang.Atom paused-for-error?
-   ;; TODO rename these to pause-*
+   ^clojure.lang.Atom pause-and-restart-for-error?
    {restart-delay-seconds :restart-delay-seconds
     restart-limit         :restart-limit}
    error]
@@ -120,17 +119,16 @@
       (raise-receive-loop-error queue-url error))
 
     (pause-to-recover-this-loop queue-url
-                                paused-for-error?
+                                pause-and-restart-for-error?
                                 restart-delay-seconds
                                 error)))
 
 (defn handle-unexpected-message
   [queue-url
    loop-stats
-   receiving-chan
    out-chan
    ^clojure.lang.Atom receive-loop-running?
-   ^clojure.lang.Atom paused-for-error?
+   ^clojure.lang.Atom pause-and-restart-for-error?
    receive-opts
    message]
   (cond
@@ -141,14 +139,22 @@
                                     loop-stats
                                     out-chan
                                     receive-loop-running?
-                                    paused-for-error?
+                                    pause-and-restart-for-error?
                                     receive-opts
                                     message)
     :else message))
 
 (defn- restart-receiving-chan?
-  [^java.lang.Boolean paused-for-error?]
-  paused-for-error?)
+  [^java.lang.Boolean pause-and-restart-for-error?]
+  pause-and-restart-for-error?)
+
+(defn- next-receiving-chan
+  [current-receiving-chan
+   create-new-receiving-chan-fn
+   ^java.lang.Boolean pause-and-restart-for-error?]
+  (if (restart-receiving-chan? pause-and-restart-for-error?)
+    (create-new-receiving-chan-fn)
+    current-receiving-chan))
 
 ;; TODO rename this to e.g. process-message-loop
 (defn receive-loop
@@ -167,16 +173,15 @@
                              sqs-ext-client
                              queue-url
                              receive-opts)
-        paused-for-error? (atom false)]
+        pause-and-restart-for-error? (atom false)]
 
        (->> (<! receiving-chan)
             (handle-unexpected-message
               queue-url
               loop-stats
-              receiving-chan
               out-chan
               receive-loop-running?
-              paused-for-error?
+              pause-and-restart-for-error?
               receive-opts)
             (put-legit-message-to-out-chan-and-maybe-delete-message
               {:sqs-ext-client sqs-ext-client
@@ -185,13 +190,14 @@
                :auto-delete?   auto-delete}))
 
        (if @receive-loop-running?
-         (recur (update-receive-loop-stats loop-stats @paused-for-error?)
-                (if (restart-receiving-chan? @paused-for-error?)
-                  (sqs/receive-to-channel
-                    sqs-ext-client
-                    queue-url
-                    receive-opts)
-                  receiving-chan)
+         (recur (update-receive-loop-stats loop-stats @pause-and-restart-for-error?)
+                (next-receiving-chan
+                  receiving-chan
+                  #(sqs/receive-to-channel
+                     sqs-ext-client
+                     queue-url
+                     receive-opts)
+                  @pause-and-restart-for-error?)
                 (atom false))
          (exit-receive-loop! queue-url loop-stats receiving-chan)))
 
