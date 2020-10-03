@@ -1,6 +1,6 @@
 (ns clj-sqs-extended.core-test
   (:require [clojure.test :refer [use-fixtures deftest testing is are]]
-            [clojure.core.async :refer [chan close! timeout alt!! alts!! <!! thread]]
+            [clojure.core.async :refer [chan close! timeout alt!! alts!! thread]]
             [clojure.core.async.impl.protocols :refer [closed?]]
             [bond.james :as bond :refer [with-spy]]
             [clj-sqs-extended.aws.sqs :as sqs]
@@ -60,6 +60,13 @@
                                                        (first test-messages-basic)
                                                        (helpers/random-group-id)))))))
 
+(defn timed-take!!
+  ([c] (timed-take!! c 1000))
+
+  ([c timeout-in-ms]
+   (-> (alts!! [c (timeout timeout-in-ms)])
+       (first))))
+
 (deftest handle-queue-sends-and-receives-basic-messages
   (doseq [format [:transit :json]]
     (let [handler-chan (chan)]
@@ -72,20 +79,20 @@
                                                @fixtures/test-queue-url
                                                (first test-messages-basic)
                                                {:format format})))
-            (is (= (first test-messages-basic) (<!! handler-chan)))
+            (is (= (first test-messages-basic) (timed-take!! handler-chan)))
 
             (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
                                                  @fixtures/test-queue-url
                                                  (first test-messages-basic)
                                                  {:format format})))
-            (is (= (first test-messages-basic) (<!! handler-chan))))
+            (is (= (first test-messages-basic) (timed-take!! handler-chan))))
 
           (testing "handle-queue can send/receive large message to standard queue"
             (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
                                                @fixtures/test-queue-url
                                                test-message-large
                                                {:format format})))
-            (is (= test-message-large (<!! handler-chan))))))
+            (is (= test-message-large (timed-take!! handler-chan))))))
       (close! handler-chan))))
 
 (deftest handle-queue-sends-and-receives-messages-without-bucket
@@ -100,11 +107,11 @@
         (is (string? (sqs-ext/send-message sqs-ext-config-without-bucket
                                            @fixtures/test-queue-url
                                            (first test-messages-basic))))
-        (is (= (first test-messages-basic) (<!! handler-chan)))
+        (is (= (first test-messages-basic) (timed-take!! handler-chan)))
         (is (string? (sqs-ext/send-message sqs-ext-config-without-bucket
                                            @fixtures/test-queue-url
                                            test-message-with-time)))
-        (is (= test-message-with-time (<!! handler-chan)))))
+        (is (= test-message-with-time (timed-take!! handler-chan)))))
     (close! handler-chan)))
 
 (deftest handle-queue-sends-and-receives-timestamped-message
@@ -116,7 +123,7 @@
         (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
                                            @fixtures/test-queue-url
                                            test-message-with-time)))
-        (is (= test-message-with-time (<!! handler-chan)))))
+        (is (= test-message-with-time (timed-take!! handler-chan)))))
     (close! handler-chan)))
 
 (deftest handle-queue-sends-and-receives-fifo-messages
@@ -133,7 +140,7 @@
                                                     (helpers/random-group-id)
                                                     {:format format})))
 
-            (is (= message (<!! handler-chan))))))
+            (is (= message (timed-take!! handler-chan))))))
       (close! handler-chan))))
 
 (deftest handle-queue-terminates-with-non-existing-queue
@@ -164,7 +171,7 @@
                                              test-message-large)))
           ;; TODO why does this work? perhaps localstack disregard s3-bucket-name?
           (is (= test-message-large
-                 (<!! handler-chan)))
+                 (timed-take!! handler-chan)))
           #_(is (= 1 (-> receive/stop-receive-loop!
                          (bond/calls)
                          (count)))))))
@@ -237,8 +244,7 @@
                                          test-message-with-time))
                (is (not (clojure.core.async.impl.protocols/closed? handler-chan)))
                (is (= test-message-with-time
-                      (-> (alts!! [handler-chan (timeout 1000)])
-                          (first)))))))))
+                      (timed-take!! handler-chan 1000))))))))
     (close! handler-chan)))
 
 (deftest handle-queue-terminates-upon-unrecoverable-error-occured
@@ -267,7 +273,7 @@
       (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
                                          @fixtures/test-queue-url
                                          (first test-messages-basic))))
-      (is (= (first test-messages-basic) (:body (<!! out-chan))))
+      (is (= (first test-messages-basic) (:body (timed-take!! out-chan))))
 
       ;; terminate receive loop and thereby close the out-channel
       (stop-fn)
@@ -276,7 +282,7 @@
                                          @fixtures/test-queue-url
                                          (last test-messages-basic))))
       (is (clojure.core.async.impl.protocols/closed? out-chan))
-      (is (nil? (<!! out-chan))))))
+      (is (nil? (timed-take!! out-chan))))))
 
 (deftest manually-deleted-messages-dont-get-resent
   (bond/with-spy [fixtures/test-handler-fn]
@@ -290,7 +296,7 @@
                                              @fixtures/test-queue-url
                                              (last test-messages-basic))))
 
-          (let [received-message (<!! handler-chan)]
+          (let [received-message (timed-take!! handler-chan)]
             ;; message received properly
             (is (= (last test-messages-basic) received-message))
 
@@ -326,7 +332,7 @@
                                              message)))
 
           ;; message received properly
-          (is (= message (<!! handler-chan)))
+          (is (= message (timed-take!! handler-chan)))
 
           ;; delete function handle is returned as last argument ...
           (is (fn? (-> fixtures/test-handler-fn bond/calls last :args last)))
@@ -338,7 +344,7 @@
 
           ;; but afterwards ...
           (Thread/sleep 150)
-          (is (= message (<!! handler-chan)))))
+          (is (= message (timed-take!! handler-chan)))))
 
       (close! handler-chan))))
 
@@ -350,7 +356,7 @@
   (dotimes [_ number-of-handler-threads]
     (thread
       (loop []
-        (when-let [message (<!! receive-chan)]
+        (when-let [message (timed-take!! receive-chan)]
           (try
             (if auto-delete
               (handler-fn message)
@@ -373,7 +379,7 @@
                                                 @fixtures/test-queue-url
                                                 (first test-messages-basic))))
 
-             (let [received-message (<!! handler-chan)]
+             (let [received-message (timed-take!! handler-chan)]
                (is (= (first test-messages-basic) (:body received-message)))
 
                ;; no delete function handle has been passed as last argument ...
