@@ -165,24 +165,36 @@
 
 (deftest handle-queue-terminates-after-restart-count-exceeded
   (testing "handle-queue terminates when the restart-count exceeds the limit"
-    (let [handler-chan (chan)]
+    (let [handler-chan          (chan)
+          restart-limit         2
+          restart-delay-seconds 1]
       (fixtures/with-test-standard-queue
         ;; WATCHOUT: We redefine receive-messages to permanently cause an error to be handled,
         ;;           which is recoverable by restarting and should cause the loop to be restarted
         ;;           by an amount of times that fits the restart-limit and delay settings.
-        (with-redefs-fn {#'sqs/wait-and-receive-messages-from-sqs
-                         (fn [_ _ _] (throw (HttpTimeoutException.
-                                              "Testing permanent network failure")))}
-          #(let [restart-limit 3
-                 restart-delay-seconds 1
-                 stop-fn (fixtures/with-handle-queue
-                           handler-chan
-                           {:auto-stop-loop false
-                            :handler-opts   {:restart-limit         restart-limit
-                                             :restart-delay-seconds restart-delay-seconds}})]
-             (Thread/sleep (+ (* restart-limit (* restart-delay-seconds 1000)) 500))
-             (let [stats (stop-fn)]
-               (is (= restart-limit (:restart-count stats)))))))
+        (bond/with-spy [receive/exit-receive-loop!]
+          (with-redefs-fn {#'sqs/wait-and-receive-messages-from-sqs
+                           (fn [_ _ _] (throw (HttpTimeoutException.
+                                                "Testing permanent network failure")))}
+            #(fixtures/with-handle-queue
+               handler-chan
+               {:handler-opts {:restart-limit         restart-limit
+                               :restart-delay-seconds restart-delay-seconds}}
+
+               ;; wait for restarts to have time to happen
+               (Thread/sleep (+ (* restart-limit
+                                   (* restart-delay-seconds 1000))
+                                500))))
+
+          ;; wait for receive-loop to teardown
+          (Thread/sleep 1000)
+
+          (let [exit-calls (-> receive/exit-receive-loop!
+                               (bond/calls))]
+            (is (= 1 (count exit-calls)))
+            (is (= restart-limit
+                   (-> exit-calls (first) (:return) (:restart-count)))))))
+
       (close! handler-chan))))
 
 (deftest handle-queue-restarts-if-recoverable-errors-occurs
