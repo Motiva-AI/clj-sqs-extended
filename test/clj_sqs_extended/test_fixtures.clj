@@ -16,8 +16,8 @@
 
 (defonce test-sqs-ext-client (atom nil))
 (defonce test-queue-url (atom nil))
-(defonce test-standard-queue-name (helpers/random-queue-name))
-(defonce test-fifo-queue-name (helpers/random-queue-name {:suffix ".fifo"}))
+(def test-standard-queue-name helpers/random-queue-name)
+(def test-fifo-queue-name (partial helpers/random-queue-name {:suffix ".fifo"}))
 (defonce test-handler-done-fn (atom nil))
 
 (defn with-test-sqs-ext-client
@@ -37,7 +37,7 @@
   [opts f]
   (reset! test-queue-url
           (sqs-ext/create-standard-queue! sqs-ext-config
-                                          test-standard-queue-name
+                                          (test-standard-queue-name)
                                           opts))
   (f)
   (Thread/sleep 50) ;; wait for receive-loop to finish in the background
@@ -58,7 +58,7 @@
   [f]
   (reset! test-queue-url
           (sqs-ext/create-fifo-queue! sqs-ext-config
-                                      test-fifo-queue-name))
+                                      (test-fifo-queue-name)))
   (f)
   (Thread/sleep 50) ;; wait for receive-loop to finish in the background
   (sqs-ext/delete-queue! sqs-ext-config

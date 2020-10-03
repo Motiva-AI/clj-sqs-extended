@@ -61,7 +61,7 @@
                                                        (helpers/random-group-id)))))))
 
 (defn timed-take!!
-  ([c] (timed-take!! c 1000))
+  ([c] (timed-take!! c 3000))
 
   ([c timeout-in-ms]
    (-> (alts!! [c (timeout timeout-in-ms)])
