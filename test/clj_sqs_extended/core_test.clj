@@ -265,29 +265,25 @@
 
 (deftest nil-returned-after-loop-was-terminated
   (testing "Stopping the listener yields nil response when receiving from the channel again"
-    (doseq [format [:transit :json]]
-      (fixtures/with-test-standard-queue
-        (let [out-chan (chan)
-              stop-fn (sqs-ext/receive-loop fixtures/sqs-ext-config
-                                            @fixtures/test-queue-url
-                                            out-chan
-                                            {:format format})]
-          (is (fn? stop-fn))
-          (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
-                                             @fixtures/test-queue-url
-                                             (first test-messages-basic)
-                                             {:format format})))
-          (is (= (first test-messages-basic) (:body (<!! out-chan))))
+    (fixtures/with-test-standard-queue
+      (let [out-chan (chan)
+            stop-fn (sqs-ext/receive-loop fixtures/sqs-ext-config
+                                          @fixtures/test-queue-url
+                                          out-chan)]
+        (is (fn? stop-fn))
+        (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
+                                           @fixtures/test-queue-url
+                                           (first test-messages-basic))))
+        (is (= (first test-messages-basic) (:body (<!! out-chan))))
 
-          ;; terminate receive loop and thereby close the out-channel
-          (stop-fn)
+        ;; terminate receive loop and thereby close the out-channel
+        (stop-fn)
 
-          (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
-                                             @fixtures/test-queue-url
-                                             (last test-messages-basic)
-                                             {:format format})))
-          (is (clojure.core.async.impl.protocols/closed? out-chan))
-          (is (nil? (<!! out-chan))))))))
+        (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
+                                           @fixtures/test-queue-url
+                                           (last test-messages-basic))))
+        (is (clojure.core.async.impl.protocols/closed? out-chan))
+        (is (nil? (<!! out-chan)))))))
 
 (deftest manually-deleted-messages-dont-get-resent
   (testing "Messages deleted by invoking the done-fn handle are not resent"
