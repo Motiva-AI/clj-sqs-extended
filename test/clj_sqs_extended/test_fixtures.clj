@@ -83,7 +83,10 @@
                                       (partial test-handler-fn handler-chan))]
     (f)
     (if (:auto-stop-loop settings)
-      (stop-fn)
+      (do
+        (stop-fn)
+        ;; wait for receive-loop async teardown
+        (Thread/sleep 100))
       stop-fn)))
 
 (defmacro with-handle-queue-defaults
