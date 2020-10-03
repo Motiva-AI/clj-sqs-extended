@@ -245,7 +245,10 @@
           (when-not (async-protocols/closed? ch)
             (recur)))
         (catch Throwable e
-          (>! ch e))))
+          (>! ch e)))
+
+      ;; close channel when exiting loop
+      (async/close! ch))
 
     ch))
 
