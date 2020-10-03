@@ -140,13 +140,18 @@
         (close! handler-chan)))))
 
 (deftest handle-queue-terminates-with-non-existing-queue
-  (testing "handle-queue terminates when non-existing queue is used"
-    (let [handler-chan (chan)
-          stats (fixtures/with-handle-queue
-                   handler-chan
-                   {:handler-opts {:queue-url "https://non-existing-queue"}})]
-         (is (contains? stats :stopped-at))
-      (close! handler-chan))))
+  (let [handler-chan (chan)]
+    (bond/with-spy [receive/stop-receive-loop!]
+      (fixtures/with-handle-queue
+        handler-chan
+        {:handler-opts {:queue-url "https://non-existing-queue"}}
+
+        (Thread/sleep 1000)
+        (is (= 1 (-> receive/stop-receive-loop!
+                     (bond/calls)
+                     (count))))))
+
+    (close! handler-chan)))
 
 (deftest handle-queue-terminates-with-non-existing-bucket
   (testing "handle-queue terminates when non-existing bucket is used"
