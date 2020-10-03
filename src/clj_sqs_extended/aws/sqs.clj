@@ -245,10 +245,7 @@
           (when-not (async-protocols/closed? ch)
             (recur)))
         (catch Throwable e
-          (>! ch e)))
-
-      ;; before exiting go-loop
-      (async/close! ch))
+          (>! ch e))))
 
     ch))
 
