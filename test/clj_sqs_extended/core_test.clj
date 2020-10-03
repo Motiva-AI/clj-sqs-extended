@@ -250,22 +250,17 @@
   (testing "handle-queue terminates when an error occured that was considered fatal/unrecoverable"
     (let [handler-chan (chan)]
       (fixtures/with-test-standard-queue
-        ;; WATCHOUT: We redefine receive-messages to permanently cause an error to be handled,
-        ;;           which is not recoverable by restarting and therefore terminates the loop.
         (with-redefs-fn {#'sqs/receive-messages
                          (fn [_ _ _]
                            (throw (RuntimeException. "Testing runtime error")))}
           #(bond/with-spy [receive/stop-receive-loop!]
-             (fixtures/with-handle-queue-defaults handler-chan)
+             (fixtures/with-handle-queue-defaults handler-chan
 
-             (is (= 2 ;; once from the error, and another from end of fixtures/with-handle-queue-defaults
-                    (-> receive/stop-receive-loop!
-                        (bond/calls)
-                        (count))))
-
-             ;; TODO we should check that handler-chan is closed, but that
-             ;; didn't seem to work because this test setup is weird
-             )))
+               (Thread/sleep 100)
+               (is (= 1
+                      (-> receive/stop-receive-loop!
+                          (bond/calls)
+                          (count))))))))
       (close! handler-chan))))
 
 (deftest nil-returned-after-loop-was-terminated
