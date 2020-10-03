@@ -41,11 +41,11 @@
 
 (defn stop-receive-loop!
   [queue-url out-chan ^clojure.lang.Atom receive-loop-running?]
-  (log/infof "Stopping receive-loop for %s ..." queue-url)
+  (log/infof "Stopping receive-loop for %s, watch for terminating message coming..." queue-url)
   (reset! receive-loop-running? false)
   (close! out-chan))
 
-(defn- exit-receive-loop!
+(defn exit-receive-loop!
   [queue-url loop-stats receiving-chan]
   (log/infof "Receive-loop terminated for %s, stats: %s" queue-url loop-stats)
   (close! receiving-chan)
