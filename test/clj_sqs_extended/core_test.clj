@@ -229,11 +229,17 @@
         (with-redefs-fn {#'sqs/receive-messages
                          (fn [_ _ _]
                            (throw (RuntimeException. "Testing runtime error")))}
-          #(let [stats (fixtures/with-handle-queue-defaults
-                         handler-chan)]
-             (Thread/sleep 500)
-             (is (= 0 (:restart-count stats)))
-             (is (contains? stats :stopped-at)))))
+          #(bond/with-spy [receive/stop-receive-loop!]
+             (fixtures/with-handle-queue-defaults handler-chan)
+
+             (is (= 2 ;; once from the error, and another from end of fixtures/with-handle-queue-defaults
+                    (-> receive/stop-receive-loop!
+                        (bond/calls)
+                        (count))))
+
+             ;; TODO we should check that handler-chan is closed, but that
+             ;; didn't seem to work because this test setup is weird
+             )))
       (close! handler-chan))))
 
 (deftest nil-returned-after-loop-was-terminated

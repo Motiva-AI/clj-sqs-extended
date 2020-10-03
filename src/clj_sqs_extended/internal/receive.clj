@@ -39,7 +39,7 @@
 
         (cond-> paused-for-error? (update :restart-count inc)))))
 
-(defn- stop-receive-loop!
+(defn stop-receive-loop!
   [queue-url receiving-chan out-chan ^clojure.lang.Atom receive-loop-running?]
   (log/infof "Stopping receive-loop for %s ..." queue-url)
   (reset! receive-loop-running? false)
