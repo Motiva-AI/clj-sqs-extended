@@ -318,40 +318,37 @@
         (close! handler-chan)))))
 
 (deftest messages-get-resent-if-not-deleted-manually-and-auto-delete-is-false
-  (testing "Messages get resent if the done-fn is not invoked upon receival and auto-delete is false"
-    (bond/with-spy [fixtures/test-handler-fn]
-      (let [handler-chan (chan)
-            visibility-timeout 1]
-        (fixtures/with-test-standard-queue-opts
-          {:visibility-timeout-in-seconds visibility-timeout}
+  (bond/with-spy [fixtures/test-handler-fn]
+    (let [handler-chan (chan)
+          message      (last test-messages-basic)
+          visibility-timeout 1]
+      (fixtures/with-test-standard-queue-opts
+        {:visibility-timeout-in-seconds visibility-timeout}
 
-          (fixtures/with-handle-queue
-            handler-chan
-            {:handler-opts {:auto-delete false}}
+        (fixtures/with-handle-queue
+          handler-chan
+          {:handler-opts {:auto-delete false}}
 
-            (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
-                                               @fixtures/test-queue-url
-                                               (last test-messages-basic))))
+          (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
+                                             @fixtures/test-queue-url
+                                             message)))
 
-            (let [received-message (<!! handler-chan)]
-              ;; message received properly
-              (is (= (last test-messages-basic) received-message))
+          ;; message received properly
+          (is (= message (<!! handler-chan)))
 
-              ;; delete function handle is returned as last argument ...
-              (let [test-handler-fn-args
-                    (-> fixtures/test-handler-fn bond/calls first :args)]
-                (is (fn? (last test-handler-fn-args))))
+          ;; delete function handle is returned as last argument ...
+          (is (fn? (-> fixtures/test-handler-fn bond/calls last :args last)))
 
-              ;; nothing comes out of the channel within the visibility timeout ...
-              (is (alt!!
-                    handler-chan false
-                    (timeout (- (* 1000 visibility-timeout) 100)) true))
+          ;; nothing comes out of the channel within the visibility timeout ...
+          (is (alt!!
+                handler-chan                                  false
+                (timeout (- (* 1000 visibility-timeout) 100)) true))
 
-              ;; but afterwards ...
-              (Thread/sleep 200)
-              (is (= (last test-messages-basic) (<!! handler-chan))))))
+          ;; but afterwards ...
+          (Thread/sleep 150)
+          (is (= message (<!! handler-chan)))))
 
-        (close! handler-chan)))))
+      (close! handler-chan))))
 
 ;; WATCHOUT: This is the original function from the core, but it
 ;;           passes the entire SQS message into the channel so
