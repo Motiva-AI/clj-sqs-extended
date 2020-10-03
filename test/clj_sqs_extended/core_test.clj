@@ -1,6 +1,6 @@
 (ns clj-sqs-extended.core-test
   (:require [clojure.test :refer [use-fixtures deftest testing is are]]
-            [clojure.core.async :refer [chan close! timeout alt!! <!! thread]]
+            [clojure.core.async :refer [chan close! timeout alt!! alts!! <!! thread]]
             [clojure.core.async.impl.protocols :refer [closed?]]
             [bond.james :as bond :refer [with-spy]]
             [clj-sqs-extended.aws.sqs :as sqs]
@@ -204,22 +204,23 @@
              (let [restart-delay-seconds 1]
                (fixtures/with-handle-queue
                  handler-chan
-                 {:auto-stop-loop false
-                  :handler-opts   {:restart-delay-seconds restart-delay-seconds}})
+                 {:handler-opts   {:restart-delay-seconds restart-delay-seconds}}
 
-               ;; give the loop some time to handle that error ...
-               (Thread/sleep (+ (* restart-delay-seconds 1000) 500))
-               (is (= 1
-                      (-> receive/pause-to-recover-this-loop
-                          (bond/calls)
-                          (count))))
+                 ;; give the loop some time to handle that error ...
+                 (Thread/sleep (+ (* restart-delay-seconds 1000) 200))
+                 (is (= 1
+                        (-> receive/pause-to-recover-this-loop
+                            (bond/calls)
+                            (count))))
 
-               ;; verify that sending/receiving still works ...
-               (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
-                                                  @fixtures/test-queue-url
-                                                  test-message-with-time)))
-               ;(is (= test-message-with-time (<!! handler-chan)))
-               ))))
+                 ;; verify that sending/receiving still works ...
+                 (is (sqs-ext/send-message fixtures/sqs-ext-config
+                                           @fixtures/test-queue-url
+                                           test-message-with-time))
+                 (is (not (clojure.core.async.impl.protocols/closed? handler-chan)))
+                 (is (= test-message-with-time
+                        (-> (alts!! [handler-chan (timeout 1000)])
+                            (first)))))))))
       (close! handler-chan))))
 
 (deftest handle-queue-terminates-upon-unrecoverable-error-occured
