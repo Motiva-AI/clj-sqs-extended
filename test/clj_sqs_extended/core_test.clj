@@ -232,7 +232,7 @@
           #(let [stats (fixtures/with-handle-queue-defaults
                          handler-chan)]
              (Thread/sleep 500)
-             (is (= (:restart-count stats) 0))
+             (is (= 0 (:restart-count stats)))
              (is (contains? stats :stopped-at)))))
       (close! handler-chan))))
 
@@ -388,15 +388,14 @@
 
         (close! handler-chan)))))
 
-(deftest recoverable-errors-get-judged-properly
-  (testing "error-might-be-recovered-by-restarting? judges errors correctly"
-    (are [severity error]
-      (= severity (receive/error-might-be-recovered-by-restarting? error))
-      true (UnknownHostException.)
-      true (SocketException.)
-      true (HttpTimeoutException. "test")
-      false (RuntimeException.)
-      false (ReflectiveOperationException.))))
+(deftest error-is-safe-to-continue?-test
+  (are [severity error]
+       (= severity (receive/error-is-safe-to-continue? error))
+       true (UnknownHostException.)
+       true (SocketException.)
+       true (HttpTimeoutException. "test")
+       false (RuntimeException.)
+       false (ReflectiveOperationException.)))
 
 (deftest unreachable-endpoint-yields-proper-exception
   (testing "Trying to connect to an unreachable endpoint yields a proper exception"
