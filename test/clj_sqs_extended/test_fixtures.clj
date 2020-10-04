@@ -35,14 +35,14 @@
 
 (defn wrap-standard-queue
   [opts f]
-  (reset! test-queue-url
-          (sqs-ext/create-standard-queue! sqs-ext-config
-                                          (test-standard-queue-name)
-                                          opts))
-  (f)
-  (Thread/sleep 50) ;; wait for receive-loop to finish in the background
-  (sqs-ext/delete-queue! sqs-ext-config
-                         @test-queue-url))
+  (let [queue-url (sqs-ext/create-standard-queue!
+                    sqs-ext-config
+                    (test-standard-queue-name)
+                    opts)]
+    (reset! test-queue-url queue-url)
+    (f)
+    (Thread/sleep 200) ;; wait for receive-loop to finish in the background
+    (sqs-ext/delete-queue! sqs-ext-config queue-url)))
 
 (defmacro with-test-standard-queue
   [& body]
@@ -56,13 +56,14 @@
 
 (defn wrap-fifo-queue
   [f]
-  (reset! test-queue-url
-          (sqs-ext/create-fifo-queue! sqs-ext-config
-                                      (test-fifo-queue-name)))
-  (f)
-  (Thread/sleep 50) ;; wait for receive-loop to finish in the background
-  (sqs-ext/delete-queue! sqs-ext-config
-                         @test-queue-url))
+  (let [queue-url (sqs-ext/create-fifo-queue!
+                    sqs-ext-config
+                    (test-fifo-queue-name))]
+    (reset! test-queue-url queue-url)
+    (f)
+    (Thread/sleep 200) ;; wait for receive-loop to finish in the background
+    (sqs-ext/delete-queue! sqs-ext-config
+                           queue-url)))
 
 (defmacro with-test-fifo-queue
   [& body]
