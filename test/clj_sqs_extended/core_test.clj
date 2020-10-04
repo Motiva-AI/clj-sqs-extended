@@ -75,24 +75,27 @@
           handler-chan
 
           (testing "handle-queue can send/receive basic messages to standard queue"
-            (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
-                                               @fixtures/test-queue-url
-                                               (first test-messages-basic)
-                                               {:format format})))
-            (is (= (first test-messages-basic) (timed-take!! handler-chan)))
-
-            (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
+            (let [message (first test-messages-basic)]
+              (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
                                                  @fixtures/test-queue-url
-                                                 (first test-messages-basic)
+                                                 message
                                                  {:format format})))
-            (is (= (first test-messages-basic) (timed-take!! handler-chan))))
+              (is (= message (timed-take!! handler-chan)))
+
+              (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
+                                                 @fixtures/test-queue-url
+                                                 message
+                                                 {:format format})))
+              (is (= message (timed-take!! handler-chan)))))
 
           (testing "handle-queue can send/receive large message to standard queue"
             (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
                                                @fixtures/test-queue-url
                                                test-message-large
                                                {:format format})))
-            (is (= test-message-large (timed-take!! handler-chan))))))
+            (is (true? ;; wrapping this in a true? so that if this test fails,
+                       ;; it doesn't print the whole giant message
+                  (= test-message-large (timed-take!! handler-chan 2000)))))))
       (close! handler-chan))))
 
 (deftest handle-queue-sends-and-receives-messages-without-bucket
