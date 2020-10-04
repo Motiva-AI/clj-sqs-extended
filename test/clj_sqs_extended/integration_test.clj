@@ -41,11 +41,7 @@
         (is (= [msg1] (<!! c)))
 
         (is (sqs-ext/send-message (sqs-ext-config) standard-queue-url msg2 {:format :json}))
-        (is (= [msg2] (<!! c)))
-
-        ;; stops receive-loop
-        (let [stats (stop-fn)]
-          (is (= 0 (:restart-count stats)))))))
+        (is (= [msg2] (<!! c))))))
 
   (testing "Large 256kb+ message, S3-backed SQS"
     ;; TODO
