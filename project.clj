@@ -11,7 +11,6 @@
                  [com.amazonaws/amazon-sqs-java-extended-client-lib "1.1.0"]
                  [com.cognitect/transit-clj "1.0.324"]
                  [cheshire "5.10.0"]
-                 [javax.xml.bind/jaxb-api "2.4.0-b180830.0359"]
                  [tick "0.4.26-alpha"]]
 
   :repl-options {:init-ns user
