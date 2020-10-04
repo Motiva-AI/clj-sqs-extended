@@ -1,6 +1,6 @@
 (ns clj-sqs-extended.core-test
   (:require [clojure.test :refer [use-fixtures deftest testing is are]]
-            [clojure.core.async :as async :refer [chan close! timeout alt!! alts!! thread]]
+            [clojure.core.async :refer [chan close! <!! timeout alt!! alts!! thread]]
             [bond.james :as bond]
             [clj-sqs-extended.aws.sqs :as sqs]
             [clj-sqs-extended.core :as sqs-ext]
@@ -77,12 +77,12 @@
             (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
                                                @fixtures/test-queue-url
                                                message)))
-            (is (= message (timed-take!! handler-chan)))
+            (is (= message (<!! handler-chan)))
 
             (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
                                                @fixtures/test-queue-url
                                                message)))
-            (is (= message (timed-take!! handler-chan)))))
+            (is (= message (<!! handler-chan)))))
 
         (testing "handle-queue can send/receive large message to standard queue"
           (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
@@ -136,7 +136,7 @@
                                                 message
                                                 (helpers/random-group-id))))
 
-        (is (= message (async/<!! handler-chan)))))))
+        (is (= message (<!! handler-chan)))))))
 
 (deftest handle-queue-terminates-with-non-existing-queue
   (let [handler-chan (chan)]
