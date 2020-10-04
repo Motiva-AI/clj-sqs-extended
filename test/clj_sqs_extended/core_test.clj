@@ -1,8 +1,7 @@
 (ns clj-sqs-extended.core-test
   (:require [clojure.test :refer [use-fixtures deftest testing is are]]
-            [clojure.core.async :refer [chan close! timeout alt!! alts!! thread]]
-            [clojure.core.async.impl.protocols :refer [closed?]]
-            [bond.james :as bond :refer [with-spy]]
+            [clojure.core.async :as async :refer [chan close! timeout alt!! alts!! thread]]
+            [bond.james :as bond]
             [clj-sqs-extended.aws.sqs :as sqs]
             [clj-sqs-extended.core :as sqs-ext]
             [clj-sqs-extended.internal.receive :as receive]
@@ -68,35 +67,31 @@
        (first))))
 
 (deftest handle-queue-sends-and-receives-basic-messages
-  (doseq [format [:transit :json]]
-    (let [handler-chan (chan)]
-      (fixtures/with-test-standard-queue
-        (fixtures/with-handle-queue-defaults
-          handler-chan
+  (let [handler-chan (chan)]
+    (fixtures/with-test-standard-queue
+      (fixtures/with-handle-queue-defaults
+        handler-chan
 
-          (testing "handle-queue can send/receive basic messages to standard queue"
-            (let [message (first test-messages-basic)]
-              (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
-                                                 @fixtures/test-queue-url
-                                                 message
-                                                 {:format format})))
-              (is (= message (timed-take!! handler-chan)))
-
-              (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
-                                                 @fixtures/test-queue-url
-                                                 message
-                                                 {:format format})))
-              (is (= message (timed-take!! handler-chan)))))
-
-          (testing "handle-queue can send/receive large message to standard queue"
+        (testing "handle-queue can send/receive basic messages to standard queue"
+          (let [message (first test-messages-basic)]
             (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
                                                @fixtures/test-queue-url
-                                               test-message-large
-                                               {:format format})))
-            (is (true? ;; wrapping this in a true? so that if this test fails,
-                       ;; it doesn't print the whole giant message
-                  (= test-message-large (timed-take!! handler-chan 2000)))))))
-      (close! handler-chan))))
+                                               message)))
+            (is (= message (timed-take!! handler-chan)))
+
+            (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
+                                               @fixtures/test-queue-url
+                                               message)))
+            (is (= message (timed-take!! handler-chan)))))
+
+        (testing "handle-queue can send/receive large message to standard queue"
+          (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
+                                             @fixtures/test-queue-url
+                                             test-message-large)))
+          (is (true? ;; wrapping this in a true? so that if this test fails,
+                     ;; it doesn't print the whole giant message
+                     (= test-message-large (timed-take!! handler-chan)))))))
+    (close! handler-chan)))
 
 (deftest handle-queue-sends-and-receives-messages-without-bucket
   (let [handler-chan (chan)
@@ -130,21 +125,18 @@
     (close! handler-chan)))
 
 (deftest handle-queue-sends-and-receives-fifo-messages
-  (doseq [format [:transit :json]]
-    (let [handler-chan (chan)]
-      (fixtures/with-test-fifo-queue
-        (fixtures/with-handle-queue-defaults
-          handler-chan
+  (let [handler-chan (chan)
+        message (first test-messages-basic)]
+    (fixtures/with-test-fifo-queue
+      (fixtures/with-handle-queue-defaults
+        handler-chan
 
-          (let [message (first test-messages-basic)]
-            (is (string? (sqs-ext/send-fifo-message fixtures/sqs-ext-config
-                                                    @fixtures/test-queue-url
-                                                    message
-                                                    (helpers/random-group-id)
-                                                    {:format format})))
+        (is (string? (sqs-ext/send-fifo-message fixtures/sqs-ext-config
+                                                @fixtures/test-queue-url
+                                                message
+                                                (helpers/random-group-id))))
 
-            (is (= message (timed-take!! handler-chan))))))
-      (close! handler-chan))))
+        (is (= message (async/<!! handler-chan)))))))
 
 (deftest handle-queue-terminates-with-non-existing-queue
   (let [handler-chan (chan)]
