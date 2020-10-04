@@ -161,14 +161,16 @@
     (create-new-receiving-chan-fn)
     current-receiving-chan))
 
-;; TODO rename this to e.g. process-message-loop
+;; TODO rename this to e.g. process-message-loop because there's another loop
+;; in receive-to-channel so the term is not clear anymore
 (defn receive-loop
   ([sqs-ext-client queue-url out-chan]
    (receive-loop sqs-ext-client queue-url out-chan {}))
 
   ([sqs-ext-client queue-url out-chan
     {:keys [auto-delete
-            restart-delay-seconds]
+            restart-delay-seconds
+            restart-limit]
      :as   receive-opts}]
    (let [receive-loop-running? (atom true)]
      (go-loop
