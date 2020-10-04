@@ -16,8 +16,8 @@
 
 (defonce test-sqs-ext-client (atom nil))
 (defonce test-queue-url (atom nil))
-(defonce test-standard-queue-name (helpers/random-queue-name))
-(defonce test-fifo-queue-name (helpers/random-queue-name {:suffix ".fifo"}))
+(def test-standard-queue-name helpers/random-queue-name)
+(def test-fifo-queue-name (partial helpers/random-queue-name {:suffix ".fifo"}))
 (defonce test-handler-done-fn (atom nil))
 
 (defn with-test-sqs-ext-client
@@ -35,14 +35,14 @@
 
 (defn wrap-standard-queue
   [opts f]
-  (reset! test-queue-url
-          (sqs-ext/create-standard-queue! sqs-ext-config
-                                          test-standard-queue-name
-                                          opts))
-  (f)
-  (Thread/sleep 50) ;; wait for receive-loop to finish in the background
-  (sqs-ext/delete-queue! sqs-ext-config
-                         @test-queue-url))
+  (let [queue-url (sqs-ext/create-standard-queue!
+                    sqs-ext-config
+                    (test-standard-queue-name)
+                    opts)]
+    (reset! test-queue-url queue-url)
+    (f)
+    (Thread/sleep 200) ;; wait for receive-loop to finish in the background
+    (sqs-ext/delete-queue! sqs-ext-config queue-url)))
 
 (defmacro with-test-standard-queue
   [& body]
@@ -56,13 +56,14 @@
 
 (defn wrap-fifo-queue
   [f]
-  (reset! test-queue-url
-          (sqs-ext/create-fifo-queue! sqs-ext-config
-                                      test-fifo-queue-name))
-  (f)
-  (Thread/sleep 50) ;; wait for receive-loop to finish in the background
-  (sqs-ext/delete-queue! sqs-ext-config
-                         @test-queue-url))
+  (let [queue-url (sqs-ext/create-fifo-queue!
+                    sqs-ext-config
+                    (test-fifo-queue-name))]
+    (reset! test-queue-url queue-url)
+    (f)
+    (Thread/sleep 200) ;; wait for receive-loop to finish in the background
+    (sqs-ext/delete-queue! sqs-ext-config
+                           queue-url)))
 
 (defmacro with-test-fifo-queue
   [& body]
@@ -83,7 +84,10 @@
                                       (partial test-handler-fn handler-chan))]
     (f)
     (if (:auto-stop-loop settings)
-      (stop-fn)
+      (do
+        (stop-fn)
+        ;; wait for receive-loop async teardown
+        (Thread/sleep 100))
       stop-fn)))
 
 (defmacro with-handle-queue-defaults

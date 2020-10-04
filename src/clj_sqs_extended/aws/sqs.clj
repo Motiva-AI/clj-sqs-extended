@@ -247,7 +247,7 @@
         (catch Throwable e
           (>! ch e)))
 
-      ;; before exiting go-loop
+      ;; close channel when exiting loop
       (async/close! ch))
 
     ch))
