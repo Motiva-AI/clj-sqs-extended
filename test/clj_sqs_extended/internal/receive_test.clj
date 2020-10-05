@@ -19,11 +19,18 @@
           (sqs/sqs-ext-client fixtures/sqs-ext-config)
 
           ;; setup
+          receiving-chan
+          (sqs/receive-to-channel
+            sqs-ext-client
+            @fixtures/test-queue-url
+            {:auto-delete true})
+
           stop-receive-loops
           (doall (for [_ (range n)]
                    (receive/receive-loop
                      sqs-ext-client
                      @fixtures/test-queue-url
+                     receiving-chan
                      c
                      {:auto-delete true})))]
 

@@ -164,10 +164,10 @@
 ;; TODO rename this to e.g. process-message-loop because there's another loop
 ;; in receive-to-channel so the term is not clear anymore
 (defn receive-loop
-  ([sqs-ext-client queue-url out-chan]
+  ([sqs-ext-client queue-url receiving-chan out-chan]
    (receive-loop sqs-ext-client queue-url out-chan {}))
 
-  ([sqs-ext-client queue-url out-chan
+  ([sqs-ext-client queue-url receiving-chan out-chan
     {:keys [auto-delete
             restart-delay-seconds
             restart-limit]
@@ -175,15 +175,10 @@
    (let [receive-loop-running? (atom true)]
      (go-loop
        [loop-stats        (init-receive-loop-stats)
-         ;; start listening on queue
-         receiving-chan    (sqs/receive-to-channel
-                             sqs-ext-client
-                             queue-url
-                             receive-opts)
         pause-and-restart-for-error? (atom false)]
 
        (->> (<! receiving-chan)
-            (handle-unexpected-message
+            #_(handle-unexpected-message
               queue-url
               loop-stats
               out-chan
@@ -198,13 +193,6 @@
 
        (if @receive-loop-running?
          (recur (update-receive-loop-stats loop-stats @pause-and-restart-for-error?)
-                (next-receiving-chan
-                  receiving-chan
-                  #(sqs/receive-to-channel
-                     sqs-ext-client
-                     queue-url
-                     receive-opts)
-                  @pause-and-restart-for-error?)
                 (atom false))
          (exit-receive-loop! queue-url loop-stats receiving-chan)))
 
