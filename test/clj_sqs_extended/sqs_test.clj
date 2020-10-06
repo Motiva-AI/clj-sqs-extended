@@ -29,7 +29,8 @@
           (log/infof "Message sent. ID: '%s'"
                      (sqs/send-message @fixtures/test-sqs-ext-client
                                        @fixtures/test-queue-url
-                                       test-message {:format format}))
+                                       test-message
+                                       {:format format}))
           (let [response (sqs/receive-messages @fixtures/test-sqs-ext-client
                                                @fixtures/test-queue-url)]
             (is (= [test-message] (map :body response)))))))))
@@ -88,3 +89,13 @@
             {"KmsMasterKeyId"               "UnbreakableMasterKey"
              "KmsDataKeyReusePeriodSeconds" "60"})))))
 
+(deftest message-without-format-attribute-is-received-correctly
+  (fixtures/with-test-standard-queue
+    (testing "A message without the format attribute gets read without error"
+      (let [plain-message (helpers/random-string-with-length 32)]
+        (.sendMessage @fixtures/test-sqs-ext-client
+                      @fixtures/test-queue-url
+                      plain-message)
+        (let [response (sqs/receive-messages @fixtures/test-sqs-ext-client
+                                             @fixtures/test-queue-url)]
+          (is (= plain-message (->> response first :body))))))))
