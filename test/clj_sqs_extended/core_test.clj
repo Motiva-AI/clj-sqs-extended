@@ -261,8 +261,18 @@
 (deftest nil-returned-after-loop-was-terminated
   (fixtures/with-test-standard-queue
     (let [out-chan (chan)
+          initial-receiving-chan (sqs/receive-to-channel
+                                   @fixtures/test-sqs-ext-client
+                                   @fixtures/test-queue-url
+                                   {:auto-delete true})
+
           stop-fn (sqs-ext/receive-loop fixtures/sqs-ext-config
                                         @fixtures/test-queue-url
+                                        initial-receiving-chan
+                                        #(sqs/receive-to-channel
+                                           @fixtures/test-sqs-ext-client
+                                           @fixtures/test-queue-url
+                                           {:auto-delete true})
                                         out-chan)]
       (is (fn? stop-fn))
       (is (string? (sqs-ext/send-message fixtures/sqs-ext-config

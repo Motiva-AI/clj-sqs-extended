@@ -19,7 +19,7 @@
           (sqs/sqs-ext-client fixtures/sqs-ext-config)
 
           ;; setup
-          receiving-chan
+          initial-receiving-chan
           (sqs/receive-to-channel
             sqs-ext-client
             @fixtures/test-queue-url
@@ -30,7 +30,11 @@
                    (receive/receive-loop
                      sqs-ext-client
                      @fixtures/test-queue-url
-                     receiving-chan
+                     initial-receiving-chan
+                     #(sqs/receive-to-channel
+                        sqs-ext-client
+                        @fixtures/test-queue-url
+                        {:auto-delete true})
                      c
                      {:auto-delete true})))]
 
@@ -40,7 +44,6 @@
                             @fixtures/test-queue-url
                             message))
 
-      (println "-------- waiting take!")
       (let [[out _] (alts!! [c (timeout 1000)])]
         (is (= message (:body out))))
 
