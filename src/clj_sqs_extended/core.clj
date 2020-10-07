@@ -18,12 +18,12 @@
 (provide-with-auto-client-from-config receive-loop receive/receive-loop)
 
 (defn- launch-handler-threads
-  [number-of-handler-threads receive-chan auto-delete handler-fn]
+  [number-of-handler-threads handler-chan auto-delete handler-fn]
   (dotimes [_ number-of-handler-threads]
     (go-loop []
       (when-let [{message-body :body
                   done-fn      :done-fn}
-                 (<! receive-chan)]
+                 (<! handler-chan)]
         (try
           (if auto-delete
             (handler-fn message-body)
@@ -94,10 +94,10 @@
            auto-delete               true}}
    handler-fn]
   (let [sqs-ext-client (sqs/sqs-ext-client sqs-ext-config)
-        receive-chan (chan)
+        handler-chan (chan)
         stop-fn (receive/receive-loop sqs-ext-client
                                       queue-url
-                                      receive-chan
+                                      handler-chan
                                       {:auto-delete           auto-delete
                                        :restart-limit         restart-limit
                                        :restart-delay-seconds restart-delay-seconds})]
@@ -113,7 +113,7 @@
                restart-delay-seconds
                auto-delete)
     (launch-handler-threads number-of-handler-threads
-                            receive-chan
+                            handler-chan
                             auto-delete
                             handler-fn)
     stop-fn))
