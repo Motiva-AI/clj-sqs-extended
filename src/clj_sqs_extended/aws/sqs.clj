@@ -1,7 +1,5 @@
 (ns clj-sqs-extended.aws.sqs
-  (:require [clojure.core.async :as async :refer [chan go >!]]
-            [clojure.core.async.impl.protocols :as async-protocols]
-            [clj-sqs-extended.aws.configuration :as aws]
+  (:require [clj-sqs-extended.aws.configuration :as aws]
             [clj-sqs-extended.aws.s3 :as s3]
             [clj-sqs-extended.internal.serdes :as serdes])
   (:import [com.amazon.sqs.javamessaging
@@ -169,20 +167,6 @@
   (->> (DeleteMessageRequest. queue-url (:receiptHandle message))
        (.deleteMessage sqs-client)))
 
-(defn- get-serdes-format-attribute
-  [message]
-  (some-> message
-          (.getMessageAttributes)
-          (get clj-sqs-ext-format-attribute)
-          (.getStringValue)
-          (keyword)))
-
-(defn- extract-relevant-keys-from-message
-  [message]
-  (some-> message
-          (bean)
-          (select-keys [:messageId :receiptHandle :body])))
-
 (def ^:private max-number-of-receiving-messages (int 10))
 
 (defn- receive-messages-request
@@ -198,57 +182,4 @@
   (->> (receive-messages-request queue-url wait-time-in-seconds)
        (.receiveMessage sqs-client)
        (.getMessages)))
-
-(defn- parse-message
-  [raw-message]
-  (let [coll   (extract-relevant-keys-from-message raw-message)
-        format (get-serdes-format-attribute raw-message)]
-    (if (seq coll)
-      (assoc coll :format format)
-      coll)))
-
-(defn- deserialize-message-if-formatted
-  [{message-body   :body
-    message-format :format
-    :as message}]
-  (if message-format
-    (->> (serdes/deserialize message-body message-format)
-         (assoc message :body))
-
-    message))
-
-(defn receive-messages
-  ([sqs-client queue-url]
-   (receive-messages sqs-client queue-url {}))
-
-  ([sqs-client queue-url
-    {:keys [wait-time-in-seconds]
-     ;; Defaults to maximum long polling
-     ;; https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-short-and-long-polling.html#sqs-long-polling
-     :or   {wait-time-in-seconds 20}}]
-   (->> (wait-and-receive-messages-from-sqs
-          sqs-client
-          queue-url
-          wait-time-in-seconds)
-        (map parse-message)
-        (map deserialize-message-if-formatted))))
-
-(defn receive-to-channel
-  [sqs-client queue-url opts]
-  (let [ch (chan max-number-of-receiving-messages)]
-    (go
-      (try
-        (loop []
-          (let [messages (receive-messages sqs-client queue-url opts)]
-            (when-not (empty? messages)
-              (async/onto-chan ch messages false)))
-          (when-not (async-protocols/closed? ch)
-            (recur)))
-        (catch Throwable e
-          (>! ch e)))
-
-      ;; close channel when exiting loop
-      (async/close! ch))
-
-    ch))
 
