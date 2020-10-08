@@ -1,5 +1,5 @@
 (ns clj-sqs-extended.core
-  (:require [clojure.core.async :refer [go-loop chan <!]]
+  (:require [clojure.core.async :refer [chan <!! thread]]
             [clojure.tools.logging :as log]
             [clj-sqs-extended.internal.core :refer [provide-with-auto-client-from-config]]
             [clj-sqs-extended.internal.receive :as receive]
@@ -20,17 +20,18 @@
 (defn- launch-handler-threads
   [number-of-handler-threads handler-chan auto-delete handler-fn]
   (dotimes [_ number-of-handler-threads]
-    (go-loop []
-      (when-let [{message-body :body
-                  done-fn      :done-fn}
-                 (<! handler-chan)]
-        (try
-          (if auto-delete
-            (handler-fn message-body)
-            (handler-fn message-body done-fn))
-          (catch Throwable error
-            (log/error error "Handler function threw an error!")))
-        (recur)))))
+    (thread
+      (loop []
+        (when-let [{message-body :body
+                    done-fn      :done-fn}
+                   (<!! handler-chan)]
+          (try
+            (if auto-delete
+              (handler-fn message-body)
+              (handler-fn message-body done-fn))
+            (catch Throwable error
+              (log/error error "Handler function threw an error!")))
+          (recur))))))
 
 (defn handle-queue
   "Setup a loop that listens to a queue and processes all incoming messages.
