@@ -17,7 +17,6 @@
             UnknownHostException]
            [java.lang ReflectiveOperationException]))
 
-
 (use-fixtures :once fixtures/with-test-sqs-ext-client)
 
 (defonce test-messages-basic
@@ -257,37 +256,6 @@
                         (bond/calls)
                         (count))))))))
     (close! handler-chan)))
-
-(deftest nil-returned-after-loop-was-terminated
-  (fixtures/with-test-standard-queue
-    (let [out-chan (chan)
-          initial-receiving-chan (sqs/receive-to-channel
-                                   @fixtures/test-sqs-ext-client
-                                   @fixtures/test-queue-url
-                                   {:auto-delete true})
-
-          stop-fn (sqs-ext/receive-loop fixtures/sqs-ext-config
-                                        @fixtures/test-queue-url
-                                        initial-receiving-chan
-                                        #(sqs/receive-to-channel
-                                           @fixtures/test-sqs-ext-client
-                                           @fixtures/test-queue-url
-                                           {:auto-delete true})
-                                        out-chan)]
-      (is (fn? stop-fn))
-      (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
-                                         @fixtures/test-queue-url
-                                         (first test-messages-basic))))
-      (is (= (first test-messages-basic) (:body (timed-take!! out-chan))))
-
-      ;; terminate receive loop and thereby close the out-channel
-      (stop-fn)
-
-      (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
-                                         @fixtures/test-queue-url
-                                         (last test-messages-basic))))
-      (is (clojure.core.async.impl.protocols/closed? out-chan))
-      (is (nil? (timed-take!! out-chan))))))
 
 (deftest manually-deleted-messages-dont-get-resent
   (bond/with-spy [fixtures/test-handler-fn]

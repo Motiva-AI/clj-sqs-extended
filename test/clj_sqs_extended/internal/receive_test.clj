@@ -1,13 +1,48 @@
 (ns clj-sqs-extended.internal.receive-test
-  (:require [clojure.test :refer [deftest is]]
-            [bond.james :as bond]
-            [clojure.core.async :as async :refer [chan close! timeout alts!!]]
+  (:require [clojure.test :refer [deftest is use-fixtures]]
+            [clojure.core.async :as async :refer [chan close! timeout alts!! <!!]]
 
             [clj-sqs-extended.test-fixtures :as fixtures]
             [clj-sqs-extended.test-helpers :as helpers]
             [clj-sqs-extended.aws.sqs :as sqs]
-            [clj-sqs-extended.core :as sqs-ext]
             [clj-sqs-extended.internal.receive :as receive]))
+
+(use-fixtures :once fixtures/with-test-sqs-ext-client)
+
+(deftest nil-returned-after-loop-was-terminated
+  (fixtures/with-test-standard-queue
+    (let [message  (helpers/random-message-basic)
+          out-chan (chan)
+
+          initial-receiving-chan (sqs/receive-to-channel
+                                 @fixtures/test-sqs-ext-client
+                                 @fixtures/test-queue-url
+                                 {:auto-delete true})
+
+        stop-fn (receive/receive-loop
+                  @fixtures/test-sqs-ext-client
+                  @fixtures/test-queue-url
+                  initial-receiving-chan
+                  #(sqs/receive-to-channel
+                     @fixtures/test-sqs-ext-client
+                     @fixtures/test-queue-url
+                     {:auto-delete true})
+                  out-chan)]
+      (is (fn? stop-fn))
+
+      (is (string? (sqs/send-message @fixtures/test-sqs-ext-client
+                                     @fixtures/test-queue-url
+                                     message)))
+      (is (= message (:body (<!! out-chan))))
+
+      ;; terminate receive loop and thereby close the out-channel
+      (stop-fn)
+
+      (is (string? (sqs/send-message @fixtures/test-sqs-ext-client
+                                     @fixtures/test-queue-url
+                                     message)))
+      (is (clojure.core.async.impl.protocols/closed? out-chan))
+      (is (nil? (<!! out-chan))))))
 
 (deftest numerous-simultaneous-receive-loops
   (fixtures/with-test-standard-queue
