@@ -1,5 +1,5 @@
 (ns clj-sqs-extended.core-test
-  (:require [clojure.test :refer [use-fixtures deftest testing is are]]
+  (:require [clojure.test :refer [use-fixtures deftest testing is]]
             [clojure.core.async :refer [chan close! <!! timeout alt!! alts!! thread]]
             [bond.james :as bond]
             [clj-sqs-extended.aws.sqs :as sqs]
@@ -11,11 +11,7 @@
             AmazonServiceException
             SdkClientException]
            [com.amazonaws.services.sqs.model AmazonSQSException]
-           [java.net.http HttpTimeoutException]
-           [java.net
-            SocketException
-            UnknownHostException]
-           [java.lang ReflectiveOperationException]))
+           [java.net.http HttpTimeoutException]))
 
 (use-fixtures :once fixtures/with-test-sqs-ext-client)
 
@@ -377,15 +373,6 @@
                                               received-message)))))))
 
       (close! handler-chan))))
-
-(deftest error-is-safe-to-continue?-test
-  (are [severity error]
-       (= severity (receive/error-is-safe-to-continue? error))
-       true (UnknownHostException.)
-       true (SocketException.)
-       true (HttpTimeoutException. "test")
-       false (RuntimeException.)
-       false (ReflectiveOperationException.)))
 
 (deftest unreachable-endpoint-yields-proper-exception
   (let [unreachable-sqs-ext-config (merge fixtures/sqs-ext-config

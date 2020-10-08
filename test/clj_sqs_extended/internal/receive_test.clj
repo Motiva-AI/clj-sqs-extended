@@ -1,11 +1,25 @@
 (ns clj-sqs-extended.internal.receive-test
-  (:require [clojure.test :refer [deftest is use-fixtures]]
+  (:require [clojure.test :refer [deftest is are use-fixtures]]
             [clojure.core.async :as async :refer [chan close! timeout alts!! <!!]]
 
             [clj-sqs-extended.test-fixtures :as fixtures]
             [clj-sqs-extended.test-helpers :as helpers]
             [clj-sqs-extended.aws.sqs :as sqs]
-            [clj-sqs-extended.internal.receive :as receive]))
+            [clj-sqs-extended.internal.receive :as receive])
+  (:import [java.net.http HttpTimeoutException]
+           [java.net
+            SocketException
+            UnknownHostException]
+           [java.lang ReflectiveOperationException]))
+
+(deftest error-is-safe-to-continue?-test
+  (are [severity error]
+       (= severity (receive/error-is-safe-to-continue? error))
+       true (UnknownHostException.)
+       true (SocketException.)
+       true (HttpTimeoutException. "test")
+       false (RuntimeException.)
+       false (ReflectiveOperationException.)))
 
 (use-fixtures :once fixtures/with-test-sqs-ext-client)
 
