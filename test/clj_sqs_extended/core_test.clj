@@ -1,5 +1,5 @@
 (ns clj-sqs-extended.core-test
-  (:require [clojure.test :refer [use-fixtures deftest testing is are]]
+  (:require [clojure.test :refer [use-fixtures deftest testing is]]
             [clojure.core.async :refer [chan close! <!! timeout alt!! alts!! thread]]
             [bond.james :as bond]
             [clj-sqs-extended.aws.sqs :as sqs]
@@ -11,12 +11,7 @@
             AmazonServiceException
             SdkClientException]
            [com.amazonaws.services.sqs.model AmazonSQSException]
-           [java.net.http HttpTimeoutException]
-           [java.net
-            SocketException
-            UnknownHostException]
-           [java.lang ReflectiveOperationException]))
-
+           [java.net.http HttpTimeoutException]))
 
 (use-fixtures :once fixtures/with-test-sqs-ext-client)
 
@@ -258,27 +253,6 @@
                         (count))))))))
     (close! handler-chan)))
 
-(deftest nil-returned-after-loop-was-terminated
-  (fixtures/with-test-standard-queue
-    (let [out-chan (chan)
-          stop-fn (sqs-ext/receive-loop fixtures/sqs-ext-config
-                                        @fixtures/test-queue-url
-                                        out-chan)]
-      (is (fn? stop-fn))
-      (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
-                                         @fixtures/test-queue-url
-                                         (first test-messages-basic))))
-      (is (= (first test-messages-basic) (:body (timed-take!! out-chan))))
-
-      ;; terminate receive loop and thereby close the out-channel
-      (stop-fn)
-
-      (is (string? (sqs-ext/send-message fixtures/sqs-ext-config
-                                         @fixtures/test-queue-url
-                                         (last test-messages-basic))))
-      (is (clojure.core.async.impl.protocols/closed? out-chan))
-      (is (nil? (timed-take!! out-chan))))))
-
 (deftest manually-deleted-messages-dont-get-resent
   (bond/with-spy [fixtures/test-handler-fn]
     (let [handler-chan (chan)]
@@ -399,15 +373,6 @@
                                               received-message)))))))
 
       (close! handler-chan))))
-
-(deftest error-is-safe-to-continue?-test
-  (are [severity error]
-       (= severity (receive/error-is-safe-to-continue? error))
-       true (UnknownHostException.)
-       true (SocketException.)
-       true (HttpTimeoutException. "test")
-       false (RuntimeException.)
-       false (ReflectiveOperationException.)))
 
 (deftest unreachable-endpoint-yields-proper-exception
   (let [unreachable-sqs-ext-config (merge fixtures/sqs-ext-config
