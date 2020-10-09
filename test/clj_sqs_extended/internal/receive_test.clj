@@ -68,26 +68,25 @@
           (sqs/sqs-ext-client fixtures/sqs-ext-config)
 
           ;; setup
-          initial-receiving-chan
-          (sqs/receive-to-channel
-            sqs-ext-client
-            @fixtures/test-queue-url
-            {:auto-delete true})
+          create-receiving-chan-fn #(sqs/receive-to-channel
+                                      sqs-ext-client
+                                      @fixtures/test-queue-url
+                                      {:auto-delete true})
+
+          receiving-chans (doall (repeatedly n create-receiving-chan-fn))
 
           stop-receive-loops
-          (doall (for [_ (range n)]
+          (doall (for [i (range n)]
                    (receive/receive-loop
                      sqs-ext-client
                      @fixtures/test-queue-url
-                     initial-receiving-chan
-                     #(sqs/receive-to-channel
-                        sqs-ext-client
-                        @fixtures/test-queue-url
-                        {:auto-delete true})
+                     (nth receiving-chans i)
+                     create-receiving-chan-fn
                      c
                      {:auto-delete true})))]
 
       (is (= n (count stop-receive-loops)))
+      (is (every? fn? stop-receive-loops))
 
       (is (sqs/send-message sqs-ext-client
                             @fixtures/test-queue-url
