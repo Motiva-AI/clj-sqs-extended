@@ -1,5 +1,5 @@
 (ns clj-sqs-extended.aws.sqs
-  (:require [clojure.core.async :as async :refer [chan go >!]]
+  (:require [clojure.core.async :as async :refer [chan go >! <!]]
             [clojure.core.async.impl.protocols :as async-protocols]
             [clj-sqs-extended.aws.configuration :as aws]
             [clj-sqs-extended.aws.s3 :as s3]
@@ -226,12 +226,17 @@
      ;; Defaults to maximum long polling
      ;; https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-short-and-long-polling.html#sqs-long-polling
      :or   {wait-time-in-seconds 20}}]
-   (->> (wait-and-receive-messages-from-sqs
-          sqs-client
-          queue-url
-          wait-time-in-seconds)
-        (map parse-message)
-        (map deserialize-message-if-formatted))))
+   (go
+     (try
+       (->> (wait-and-receive-messages-from-sqs
+              sqs-client
+              queue-url
+              wait-time-in-seconds)
+            (map parse-message)
+            (map deserialize-message-if-formatted))
+       (catch Throwable ex
+         ;; returns exception
+         ex)))))
 
 (defn receive-to-channel
   [sqs-client queue-url opts]
@@ -239,9 +244,14 @@
     (go
       (try
         (loop []
-          (let [messages (receive-messages sqs-client queue-url opts)]
+          (let [messages (<! (receive-messages sqs-client queue-url opts))]
+
+            (when (instance? Exception messages)
+              (throw messages))
+
             (when-not (empty? messages)
-              (async/onto-chan ch messages false)))
+              (<! (async/onto-chan ch messages false))))
+
           (when-not (async-protocols/closed? ch)
             (recur)))
         (catch Throwable e
