@@ -238,17 +238,23 @@
          ;; returns exception
          ex)))))
 
+(defn- throw-err [x]
+  (when (instance? Exception x)
+    (throw x))
+  x)
+
+(defmacro <?
+  "Same as <! but throws error if an error is returned from channel"
+  [channel]
+  `(throw-err (clojure.core.async/<! ~channel)))
+
 (defn receive-to-channel
   [sqs-client queue-url opts]
   (let [ch (chan max-number-of-receiving-messages)]
     (go
       (try
         (loop []
-          (let [messages (<! (receive-messages sqs-client queue-url opts))]
-
-            (when (instance? Exception messages)
-              (throw messages))
-
+          (let [messages (<? (receive-messages sqs-client queue-url opts))]
             (when-not (empty? messages)
               (<! (async/onto-chan ch messages false))))
 
