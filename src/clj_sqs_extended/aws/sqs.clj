@@ -159,7 +159,7 @@
                                                (build-message-format-attribute-value format)))
      (when deduplication-id
        ;; Refer to https://docs.aws.amazon.com/AWSJavaSDK/latest/javadoc/com/amazonaws/services/sqs/model/SendMessageRequest.html#setMessageDeduplicationId-java.lang.String-
-       (doto request (.setMessageDeduplicationId deduplication-id)))
+       (doto request (.setMessageDeduplicationId (str deduplication-id))))
      (->> request
           (.sendMessage sqs-client)
           (.getMessageId)))))
