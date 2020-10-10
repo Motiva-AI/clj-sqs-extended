@@ -1,6 +1,7 @@
 (ns clj-sqs-extended.sqs-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [bond.james :as bond]
+            [clojure.core.async :refer [<!!]]
             [clojure.tools.logging :as log]
             [clj-sqs-extended.aws.sqs :as sqs]
             [clj-sqs-extended.test-fixtures :as fixtures]
@@ -17,8 +18,8 @@
 (deftest can-receive-message-when-idle
   (testing "Receive empty response when no message has been send before"
     (fixtures/with-test-standard-queue
-      (let [response (sqs/receive-messages @fixtures/test-sqs-ext-client
-                                           @fixtures/test-queue-url)]
+      (let [response (<!! (sqs/receive-messages @fixtures/test-sqs-ext-client
+                                                @fixtures/test-queue-url))]
         (is (empty? response))))))
 
 (deftest can-receive-message
@@ -31,8 +32,8 @@
                                        @fixtures/test-queue-url
                                        test-message
                                        {:format format}))
-          (let [response (sqs/receive-messages @fixtures/test-sqs-ext-client
-                                               @fixtures/test-queue-url)]
+          (let [response (<!! (sqs/receive-messages @fixtures/test-sqs-ext-client
+                                                    @fixtures/test-queue-url))]
             (is (= [test-message] (map :body response)))))))))
 
 (deftest safely-receive-nil-message
@@ -45,8 +46,8 @@
   (fixtures/with-test-standard-queue
     (bond/with-stub! [[sqs/wait-and-receive-messages-from-sqs (constantly [])]]
       ;; ensure that this doesn't crash
-      (is (empty? (sqs/receive-messages @fixtures/test-sqs-ext-client
-                                        @fixtures/test-queue-url))))))
+      (is (empty? (<!! (sqs/receive-messages @fixtures/test-sqs-ext-client
+                                             @fixtures/test-queue-url)))))))
 
 (deftest can-receive-fifo-message
   (fixtures/with-test-fifo-queue
@@ -58,8 +59,8 @@
                                (helpers/random-group-id)
                                {:format format})
 
-        (let [response (sqs/receive-messages @fixtures/test-sqs-ext-client
-                                             @fixtures/test-queue-url)]
+        (let [response (<!! (sqs/receive-messages @fixtures/test-sqs-ext-client
+                                                  @fixtures/test-queue-url))]
           (is (= [test-message] (map :body response))))))))
 
 (deftest can-send-message-larger-than-256kb
@@ -68,8 +69,8 @@
       (sqs/send-message @fixtures/test-sqs-ext-client
                         @fixtures/test-queue-url
                         test-message-larger-than-256kb)
-      (let [response (sqs/receive-messages @fixtures/test-sqs-ext-client
-                                           @fixtures/test-queue-url)]
+      (let [response (<!! (sqs/receive-messages @fixtures/test-sqs-ext-client
+                                                @fixtures/test-queue-url))]
         (is (= [test-message-larger-than-256kb] (map :body response)))))))
 
 (deftest create-queue-request-attributes-attached-correctly
@@ -96,6 +97,6 @@
         (.sendMessage @fixtures/test-sqs-ext-client
                       @fixtures/test-queue-url
                       plain-message)
-        (let [response (sqs/receive-messages @fixtures/test-sqs-ext-client
-                                             @fixtures/test-queue-url)]
+        (let [response (<!! (sqs/receive-messages @fixtures/test-sqs-ext-client
+                                                  @fixtures/test-queue-url))]
           (is (= plain-message (->> response first :body))))))))
