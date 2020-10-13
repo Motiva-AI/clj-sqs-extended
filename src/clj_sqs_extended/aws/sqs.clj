@@ -1,6 +1,7 @@
 (ns clj-sqs-extended.aws.sqs
-  (:require [clojure.core.async :as async :refer [chan go >! <!]]
+  (:require [clojure.core.async :as async :refer [chan >!! <!!]]
             [clojure.core.async.impl.protocols :as async-protocols]
+            [clojure.tools.logging :as log]
             [clj-sqs-extended.aws.configuration :as aws]
             [clj-sqs-extended.aws.s3 :as s3]
             [clj-sqs-extended.internal.serdes :as serdes])
@@ -226,7 +227,7 @@
      ;; Defaults to maximum long polling
      ;; https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-short-and-long-polling.html#sqs-long-polling
      :or   {wait-time-in-seconds 20}}]
-   (go
+   (async/thread ;; do not use a go-block here because https://eli.thegreenplace.net/2017/clojure-concurrency-and-blocking-with-coreasync/
      (try
        (->> (wait-and-receive-messages-from-sqs
               sqs-client
@@ -243,25 +244,25 @@
     (throw x))
   x)
 
-(defmacro <?
+(defmacro <??
   "Same as <! but throws error if an error is returned from channel"
   [channel]
-  `(throw-err (clojure.core.async/<! ~channel)))
+  `(throw-err (clojure.core.async/<!! ~channel)))
 
 (defn receive-to-channel
   [sqs-client queue-url opts]
   (let [ch (chan max-number-of-receiving-messages)]
-    (go
+    (async/thread
       (try
         (loop []
-          (let [messages (<? (receive-messages sqs-client queue-url opts))]
+          (let [messages (<?? (receive-messages sqs-client queue-url opts))]
             (when-not (empty? messages)
-              (<! (async/onto-chan ch messages false))))
+              (<!! (async/onto-chan! ch messages false))))
 
           (when-not (async-protocols/closed? ch)
             (recur)))
         (catch Throwable e
-          (>! ch e)))
+          (>!! ch e)))
 
       ;; close channel when exiting loop
       (async/close! ch))
