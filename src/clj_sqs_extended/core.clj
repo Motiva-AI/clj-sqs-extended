@@ -96,17 +96,10 @@
    handler-fn]
   (let [sqs-ext-client (sqs/sqs-ext-client sqs-ext-config)
         handler-chan (chan)
-        create-receiving-chan-fn #(sqs/receive-to-channel
-                                    sqs-ext-client
-                                    queue-url
-                                    {:auto-delete auto-delete})
 
-        initial-receiving-chan (create-receiving-chan-fn)
         stop-fn (receive/receive-loop
                   sqs-ext-client
                   queue-url
-                  initial-receiving-chan
-                  create-receiving-chan-fn
                   handler-chan
                   {:auto-delete           auto-delete
                    :restart-limit         restart-limit

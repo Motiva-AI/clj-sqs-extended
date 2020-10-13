@@ -28,20 +28,10 @@
     (let [message  (helpers/random-message-basic)
           out-chan (chan)
 
-          initial-receiving-chan (sqs/receive-to-channel
-                                 @fixtures/test-sqs-ext-client
-                                 @fixtures/test-queue-url
-                                 {:auto-delete true})
-
-        stop-fn (receive/receive-loop
-                  @fixtures/test-sqs-ext-client
-                  @fixtures/test-queue-url
-                  initial-receiving-chan
-                  #(sqs/receive-to-channel
-                     @fixtures/test-sqs-ext-client
-                     @fixtures/test-queue-url
-                     {:auto-delete true})
-                  out-chan)]
+          stop-fn (receive/receive-loop
+                    @fixtures/test-sqs-ext-client
+                    @fixtures/test-queue-url
+                    out-chan)]
       (is (fn? stop-fn))
 
       (is (string? (sqs/send-message @fixtures/test-sqs-ext-client
@@ -68,20 +58,11 @@
           (sqs/sqs-ext-client fixtures/sqs-ext-config)
 
           ;; setup
-          create-receiving-chan-fn #(sqs/receive-to-channel
-                                      sqs-ext-client
-                                      @fixtures/test-queue-url
-                                      {:auto-delete true})
-
-          receiving-chans (doall (repeatedly n create-receiving-chan-fn))
-
           stop-receive-loops
-          (doall (for [i (range n)]
+          (doall (for [_ (range n)]
                    (receive/receive-loop
                      sqs-ext-client
                      @fixtures/test-queue-url
-                     (nth receiving-chans i)
-                     create-receiving-chan-fn
                      c
                      {:auto-delete true})))]
 
