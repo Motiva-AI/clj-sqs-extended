@@ -18,7 +18,11 @@ jobs:
 
       - run:
           name: Install dependencies
-          command: docker-compose run --no-deps app lein -U deps
+          command: lein -U deps
+
+      - run:
+          name: restore mvn repository to remote docker
+          command: cd ~/ && tar cf - ./.m2 | ssh remote-docker "cd ~/ && tar xpvf -"
 
       - run:
           name: Run tests
@@ -33,9 +37,9 @@ jobs:
           path: target/test_output
 
       - save_cache:
+          key: v1-clj-sqs-extended-library-wrapper-{{ checksum "project.clj" }}
           paths:
             - ~/.m2
-          key: v1-clj-sqs-extended-library-wrapper-{{ checksum "project.clj" }}
 
       - deploy:
           name: Publish to Clojars
