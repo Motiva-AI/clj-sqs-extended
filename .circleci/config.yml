@@ -22,8 +22,12 @@ jobs:
 
       - run:
           name: Run tests
-          command: docker-compose run app sh -c "dev/resources/wait_for.sh localstack:4566 -t 60 -- lein test :all"
+          command: docker-compose run --name app app sh -c "dev/resources/wait_for.sh localstack:4566 -t 60 -- lein test :all"
           no_output_timeout: 90s
+
+      - run:
+          name: Copy test results
+          command: docker cp app:/app/target ./
 
       - store_test_results:
           path: target/test_output
