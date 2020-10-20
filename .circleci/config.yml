@@ -4,6 +4,9 @@ jobs:
   build:
     docker:
       - image: circleci/clojure:openjdk-11-lein
+        auth:
+          username: motivaaai
+          password: $DOCKER_HUB_PASSWORD
 
     steps:
       - checkout
@@ -47,4 +50,12 @@ jobs:
             if [ "${CIRCLE_BRANCH}" == "master" ]; then
                 lein deploy releases
             fi
+
+workflows:
+  version: 2
+  build_and_test:
+    jobs:
+      - build:
+          context:
+            - docker_hub_creds
 
