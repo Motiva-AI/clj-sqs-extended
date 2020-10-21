@@ -15,6 +15,7 @@ services:
       - INTEGRATION_ACCESS_KEY
       - INTEGRATION_SECRET_KEY
       - INTEGRATION_TEST_STANDARD_QUEUE_URL
+      - INTEGRATION_TEST_S3_BUCKET_NAME
 
     depends_on:
        - localstack
