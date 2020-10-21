@@ -6,11 +6,11 @@
             [clj-sqs-extended.test-helpers :as helpers]))
 
 (defn sqs-ext-config []
-  {:access-key    (env :integration-access-key)
-   :secret-key    (env :integration-secret-key)
-   :sqs-endpoint  "https://sqs.us-west-2.amazonaws.com"
-   :s3-endpoint    nil ;; TODO
-   :s3-bucket-name nil ;; TODO
+  {:access-key     (env :integration-access-key)
+   :secret-key     (env :integration-secret-key)
+   :sqs-endpoint   "https://sqs.us-west-2.amazonaws.com"
+   :s3-endpoint    "https://s3.us-west-2.amazonaws.com"
+   :s3-bucket-name (env :integration-test-s3-bucket-name)
    :region         "us-west-2"})
 
 (def standard-queue-url (env :integration-test-standard-queue-url))
@@ -41,9 +41,28 @@
         (is (= [msg1] (<!! c)))
 
         (is (sqs-ext/send-message (sqs-ext-config) standard-queue-url msg2 {:format :json}))
-        (is (= [msg2] (<!! c))))))
+        (is (= [msg2] (<!! c)))
+
+        (stop-fn))))
 
   (testing "Large 256kb+ message, S3-backed SQS"
-    ;; TODO
-    ))
+    (let [c          (chan)
+          handler-fn (fn [& args] (>!! c args))
+
+          msg1 (helpers/random-message-larger-than-256kb)
+          msg2 (helpers/random-message-larger-than-256kb)]
+
+      (is (sqs-ext/send-message (sqs-ext-config) standard-queue-url msg1 {:format :transit}))
+
+      (let [stop-fn (sqs-ext/handle-queue
+                      (sqs-ext-config)
+                      {:queue-url standard-queue-url
+                       :auto-delete true}
+                      handler-fn)]
+        (is (= [msg1] (<!! c)))
+
+        (is (sqs-ext/send-message (sqs-ext-config) standard-queue-url msg2 {:format :json}))
+        (is (= [msg2] (<!! c)))
+
+        (stop-fn)))))
 
