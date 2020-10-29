@@ -5,21 +5,7 @@
             [clj-sqs-extended.test-fixtures :as fixtures]
             [clj-sqs-extended.test-helpers :as helpers]
             [clj-sqs-extended.aws.sqs :as sqs]
-            [clj-sqs-extended.internal.receive :as receive])
-  (:import [java.net.http HttpTimeoutException]
-           [java.net
-            SocketException
-            UnknownHostException]
-           [java.lang ReflectiveOperationException]))
-
-(deftest error-is-safe-to-continue?-test
-  (are [severity error]
-       (= severity (receive/error-is-safe-to-continue? error))
-       true (UnknownHostException.)
-       true (SocketException.)
-       true (HttpTimeoutException. "test")
-       false (RuntimeException.)
-       false (ReflectiveOperationException.)))
+            [clj-sqs-extended.internal.receive :as receive]))
 
 (use-fixtures :once fixtures/with-test-sqs-ext-client)
 
