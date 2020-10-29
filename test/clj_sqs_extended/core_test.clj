@@ -187,7 +187,7 @@
 
     (close! handler-chan)))
 
-(deftest handle-queue-restarts-if-recoverable-errors-occurs
+(deftest handle-queue-restarts-if-error-occurs
   (let [handler-chan (chan)
         wait-and-receive-messages-from-sqs sqs/wait-and-receive-messages-from-sqs
         called-counter (atom 0)]
