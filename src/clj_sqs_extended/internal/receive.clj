@@ -8,12 +8,6 @@
             UnknownHostException]
            [java.net.http HttpTimeoutException]))
 
-(defn error-is-safe-to-continue?
-  [error]
-  (contains? #{UnknownHostException
-               SocketException
-               HttpTimeoutException} (type error)))
-
 (defn- seconds-between
   [t1 t2]
   (t/seconds (t/between t1 t2)))
@@ -62,10 +56,9 @@
            (format "receive-loop for queue '%s' failed." queue-url)
            {:error error})))
 
-(defn- message-receival-error-safe-to-continue?
-  [loop-state restart-limit error]
-  (and (error-is-safe-to-continue? error)
-       (not (restart-limit-reached? loop-state restart-limit))))
+(defn- continue-after-message-receival-error?
+  [loop-state restart-limit]
+  (not (restart-limit-reached? loop-state restart-limit)))
 
 (defn put-legit-message-to-out-chan-and-maybe-delete-message
   [{sqs-ext-client :sqs-ext-client
@@ -118,7 +111,7 @@
    {restart-delay-seconds :restart-delay-seconds
     restart-limit         :restart-limit}
    error]
-  (if-not (message-receival-error-safe-to-continue? loop-stats restart-limit error)
+  (if-not (continue-after-message-receival-error? loop-stats restart-limit)
     (do
       (stop-receive-loop! queue-url out-chan receive-loop-running?)
       (raise-receive-loop-error queue-url error))

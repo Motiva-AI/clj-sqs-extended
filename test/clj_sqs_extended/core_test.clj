@@ -133,20 +133,6 @@
 
         (is (= message (<!! handler-chan)))))))
 
-(deftest handle-queue-terminates-with-non-existing-queue
-  (let [handler-chan (chan)]
-    (bond/with-spy [receive/stop-receive-loop!]
-      (fixtures/with-handle-queue
-        handler-chan
-        {:handler-opts {:queue-url "https://non-existing-queue"}}
-
-        (Thread/sleep 1000)
-        (is (= 1 (-> receive/stop-receive-loop!
-                     (bond/calls)
-                     (count))))))
-
-    (close! handler-chan)))
-
 ;; we unexpectedly get a round-trip message working when it's supposed to fail
 #_(deftest handle-queue-terminates-with-non-existing-bucket
   (let [handler-chan (chan)]
@@ -201,7 +187,7 @@
 
     (close! handler-chan)))
 
-(deftest handle-queue-restarts-if-recoverable-errors-occurs
+(deftest handle-queue-restarts-if-error-occurs
   (let [handler-chan (chan)
         wait-and-receive-messages-from-sqs sqs/wait-and-receive-messages-from-sqs
         called-counter (atom 0)]
@@ -235,22 +221,6 @@
                (is (not (clojure.core.async.impl.protocols/closed? handler-chan)))
                (is (= test-message-with-time
                       (timed-take!! handler-chan 1000))))))))
-    (close! handler-chan)))
-
-(deftest handle-queue-terminates-upon-unrecoverable-error-occured
-  (let [handler-chan (chan)]
-    (fixtures/with-test-standard-queue
-      (with-redefs-fn {#'sqs/receive-messages
-                       (fn [_ _ _]
-                         (throw (RuntimeException. "Testing runtime error")))}
-        #(bond/with-spy [receive/stop-receive-loop!]
-           (fixtures/with-handle-queue-defaults handler-chan
-
-             (Thread/sleep 100)
-             (is (= 1
-                    (-> receive/stop-receive-loop!
-                        (bond/calls)
-                        (count))))))))
     (close! handler-chan)))
 
 (deftest manually-deleted-messages-dont-get-resent
