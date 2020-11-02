@@ -1,5 +1,5 @@
 (ns clj-sqs-extended.internal.receive
-  (:require [clojure.core.async :refer [go-loop close! <! >!!]]
+  (:require [clojure.core.async :as async :refer [go-loop close! <! >!!]]
             [clojure.tools.logging :as log]
             [tick.alpha.api :as t]
             [clj-sqs-extended.aws.sqs :as sqs])
@@ -60,6 +60,15 @@
   [loop-state restart-limit]
   (not (restart-limit-reached? loop-state restart-limit)))
 
+(defn async-delete-message!
+  "delete-message on the AWS SDK can block for many seconds. This fn runs
+   sqs/delete-message! in the background.
+
+   Reference:
+   https://www.selikoff.net/2018/02/14/the-amazon-aws-java-sqs-client-not-thread-safe/"
+  [sqs-ext-client queue-url message]
+  (async/thread (sqs/delete-message! sqs-ext-client queue-url message)))
+
 (defn put-legit-message-to-out-chan-and-maybe-delete-message
   [{sqs-ext-client :sqs-ext-client
     queue-url      :queue-url
@@ -67,7 +76,7 @@
     auto-delete?   :auto-delete?}
    message]
   (when message
-    (let [done-fn #(sqs/delete-message! sqs-ext-client queue-url message)
+    (let [done-fn #(async-delete-message! sqs-ext-client queue-url message)
           msg (cond-> message
                 (not auto-delete?) (assoc :done-fn done-fn))]
       (if (:body message)
