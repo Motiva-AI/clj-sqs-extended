@@ -59,6 +59,9 @@
                                   false: will provide a `done-fn` key inside the returned messages and
                                          the message will be left untouched by this API
                                   (optional, defaults: true)
+      wait-time-in-seconds      - Number of seconds that sqs/receive-messages to wait between polls,
+                                  i.e. long-polling interval (optional, default: 20)
+                                  https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-short-and-long-polling.html#sqs-long-polling
 
     handler-fn - A function to which new incoming messages will be passed to (required)
 
@@ -88,7 +91,8 @@
            number-of-handler-threads
            restart-limit
            restart-delay-seconds
-           auto-delete]
+           auto-delete
+           wait-time-in-seconds]
     :or   {number-of-handler-threads 4
            restart-limit             6
            restart-delay-seconds     10
@@ -103,7 +107,8 @@
                   handler-chan
                   {:auto-delete           auto-delete
                    :restart-limit         restart-limit
-                   :restart-delay-seconds restart-delay-seconds})]
+                   :restart-delay-seconds restart-delay-seconds
+                   :wait-time-in-seconds  wait-time-in-seconds})]
     (log/infof (str "Handling queue '%s' with bucket [%s], "
                     "number-of-handler-threads [%d], "
                     "restart-limit [%d], "

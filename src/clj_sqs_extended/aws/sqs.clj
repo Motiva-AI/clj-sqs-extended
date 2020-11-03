@@ -250,7 +250,10 @@
   `(throw-err (clojure.core.async/<!! ~channel)))
 
 (defn receive-to-channel
-  [sqs-client queue-url opts]
+  [sqs-client
+   queue-url
+   {:keys [wait-time-in-seconds]
+    :as opts}]
   (let [ch (chan max-number-of-receiving-messages)]
     (async/thread
       (try

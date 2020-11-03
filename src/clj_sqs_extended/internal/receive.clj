@@ -172,13 +172,14 @@
     out-chan
     {:keys [auto-delete
             restart-delay-seconds
-            restart-limit]
+            restart-limit
+            wait-time-in-seconds]
      :as   receive-opts}]
    (let [receive-loop-running? (atom true)
          create-new-receiving-chan-fn #(sqs/receive-to-channel
                                          sqs-ext-client
                                          queue-url
-                                         {})]
+                                         {:wait-time-in-seconds wait-time-in-seconds})]
      (go-loop
        [loop-stats        (init-receive-loop-stats)
         receiving-chan    (create-new-receiving-chan-fn)
