@@ -30,7 +30,7 @@
               (handler-fn message-body)
               (handler-fn message-body done-fn))
             (catch Throwable error
-              (log/error error "Handler function threw an error!")))
+              (log/error error (.getMessage error))))
           (recur))))))
 
 (defn handle-queue
