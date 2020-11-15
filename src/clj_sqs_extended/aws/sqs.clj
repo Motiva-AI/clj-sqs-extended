@@ -166,9 +166,13 @@
           (.getMessageId)))))
 
 (defn delete-message!
-  [sqs-client queue-url message]
-  (->> (DeleteMessageRequest. queue-url (:receiptHandle message))
-       (.deleteMessage sqs-client)))
+  [sqs-client queue-url message-or-receipt-handle]
+  (let [receipt-handle (if (map? message-or-receipt-handle)
+                         (:receiptHandle message-or-receipt-handle)
+                         message-or-receipt-handle)]
+    (->> receipt-handle
+         (DeleteMessageRequest. queue-url)
+         (.deleteMessage sqs-client))))
 
 (defn- get-serdes-format-attribute
   [message]
