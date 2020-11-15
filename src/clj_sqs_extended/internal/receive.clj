@@ -76,7 +76,6 @@
          :done-fn
          #(async-delete-message! sqs-ext-client queue-url message)))
 
-
 (defn put-legit-message-to-out-chan
   [{queue-url      :queue-url
     out-chan       :out-chan}

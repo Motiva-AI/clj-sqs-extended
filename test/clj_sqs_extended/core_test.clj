@@ -304,7 +304,7 @@
               (println "Handler function threw an error!")))
           (recur))))))
 
-(deftest done-fn-handle-absent-when-auto-delete-true
+(deftest message-is-auto-deleted-when-auto-delete-is-true
   (bond/with-spy [fixtures/test-handler-fn]
     (let [handler-chan (chan)]
       (fixtures/with-test-standard-queue
