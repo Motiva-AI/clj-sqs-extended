@@ -66,8 +66,10 @@
 
    Reference:
    https://www.selikoff.net/2018/02/14/the-amazon-aws-java-sqs-client-not-thread-safe/"
-  [sqs-ext-client queue-url message]
-  (async/thread (sqs/delete-message! sqs-ext-client queue-url message)))
+  [sqs-ext-client
+   queue-url
+   {receipt-handle :receiptHandle}]
+  (async/thread (sqs/delete-message! sqs-ext-client queue-url receipt-handle)))
 
 (defn put-legit-message-to-out-chan-and-maybe-delete-message
   [{sqs-ext-client :sqs-ext-client
