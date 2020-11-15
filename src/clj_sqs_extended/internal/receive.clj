@@ -71,35 +71,40 @@
    {receipt-handle :receiptHandle}]
   (async/thread (sqs/delete-message! sqs-ext-client queue-url receipt-handle)))
 
-(defn put-legit-message-to-out-chan-and-maybe-delete-message
-  [{sqs-ext-client :sqs-ext-client
-    queue-url      :queue-url
-    out-chan       :out-chan
-    auto-delete?   :auto-delete?}
+(defn assoc-done-fn-to-message [sqs-ext-client queue-url message]
+  (when message
+    (assoc message
+           :done-fn
+           #(async-delete-message! sqs-ext-client queue-url message))))
+
+
+(defn put-legit-message-to-out-chan
+  [{queue-url      :queue-url
+    out-chan       :out-chan}
    message]
   (when message
-    (let [done-fn #(async-delete-message! sqs-ext-client queue-url message)
-          msg (cond-> message
-                (not auto-delete?) (assoc :done-fn done-fn))]
-      (if (:body message)
-        (when-not (>!! out-chan msg)
-          ;; TODO refactor this fn's logic so that we don't need to throw an exception to stop auto-delete
+    (if (:body message)
+      (when-not (>!! out-chan message)
+        ;; TODO refactor this fn's logic so that we don't need to throw an exception to stop auto-delete
 
-          ;; throwing an exception here to stop the process so that we don't
-          ;; delete the current received message without putting it to out-chan
-          (throw (ex-info
-                   (format "Failed to put message to out-chan because the channel is closed already. Queue %s"
-                           queue-url)
-                   {})))
+        ;; throwing an exception here to stop the process so that we don't
+        ;; delete the current received message without putting it to out-chan
+        (throw (ex-info
+                 (format "Failed to put message to out-chan because the channel is closed already. Queue %s"
+                         queue-url)
+                 {})))
 
-        ;; Question: do we need to delete a nil message?
-        (log/infof "Queue '%s' received a nil (:body message), message: %s"
-                   queue-url
-                   message))
+      ;; Question: do we need to delete a nil message?
+      (log/infof "Queue '%s' received a nil (:body message), message: %s"
+                 queue-url
+                 message)))
 
-      ;; TODO refactor this out to its own fn
-      (when auto-delete?
-        (done-fn)))))
+  ;; pass along
+  message)
+
+(defn delete-message-if-auto-delete [auto-delete? {done-fn :done-fn}]
+  (when (and auto-delete? done-fn)
+    (done-fn)))
 
 (defn pause-to-recover-this-loop
   [queue-url
@@ -194,11 +199,13 @@
               receive-loop-running?
               pause-and-restart-for-error?
               receive-opts)
-            (put-legit-message-to-out-chan-and-maybe-delete-message
+            (assoc-done-fn-to-message sqs-ext-client queue-url)
+            (put-legit-message-to-out-chan
               {:sqs-ext-client sqs-ext-client
                :queue-url      queue-url
                :out-chan       out-chan
-               :auto-delete?   auto-delete}))
+               :auto-delete?   auto-delete})
+            (delete-message-if-auto-delete auto-delete))
 
        (if @receive-loop-running?
          (recur (update-receive-loop-stats loop-stats @pause-and-restart-for-error?)
