@@ -1,6 +1,6 @@
 (ns clj-sqs-extended.core-test
   (:require [clojure.test :refer [use-fixtures deftest testing is]]
-            [clojure.core.async :refer [chan close! <!! timeout alt!! alts!! thread]]
+            [clojure.core.async :refer [chan close! <!! >!! timeout alt!! alts!! thread]]
             [bond.james :as bond]
             [clj-sqs-extended.aws.sqs :as sqs]
             [clj-sqs-extended.core :as sqs-ext]
@@ -343,6 +343,55 @@
                                               received-message)))))))
 
       (close! handler-chan))))
+
+(deftest message-is-auto-deleted-before-handler-finishes-when-auto-delete-is-true
+  (fixtures/with-test-standard-queue
+    (with-redefs-fn {#'sqs-ext/launch-handler-threads
+                     launch-handler-threads-with-complete-sqs-message-forwarding}
+      #(let [c                 (chan)
+            message-preview    (promise)
+            message-processed? (atom false)
+
+            handler-fn (fn [message]
+                         ;; deliver the received message prior to a sleep so
+                         ;; that we can test if it's been deleted by
+                         ;; auto-delete
+                         (deliver message-preview message)
+                         (Thread/sleep 2000)
+                         (reset! message-processed? true)
+                         (>!! c message))
+            msg        (helpers/random-message-basic)]
+
+        (is (sqs-ext/send-message fixtures/sqs-ext-config @fixtures/test-queue-url msg))
+
+        (bond/with-spy [receive/delete-message-if-auto-delete]
+          (let [stop-fn (sqs-ext/handle-queue
+                          fixtures/sqs-ext-config
+                          {:queue-url @fixtures/test-queue-url
+                           :number-of-handler-threads 1
+                           :auto-delete true}
+                          handler-fn)]
+            (is (fn? (:done-fn @message-preview)))
+            (is (= 1
+                   (-> receive/delete-message-if-auto-delete
+                       (bond/calls)
+                       (count))))
+            ;; trying to delete message here should throw error since message should have been deleted already
+            (is (thrown-with-msg?
+                  AmazonSQSException
+                  #"^.*Service: AmazonSQS; Status Code: 400;.*$"
+                  (sqs-ext/delete-message! fixtures/sqs-ext-config
+                                           @fixtures/test-queue-url
+                                           @message-preview)))
+            ;; ensure that he message hasn't been processed by handler-fn at this point
+            (is (false? @message-processed?))
+
+            ;; block and wait for message to come in properly
+            (is (= msg (:body (<!! c))))
+            (is (true? @message-processed?))
+
+            ;; teardown
+            (stop-fn)))))))
 
 (deftest unreachable-endpoint-yields-proper-exception
   (let [unreachable-sqs-ext-config (merge fixtures/sqs-ext-config
