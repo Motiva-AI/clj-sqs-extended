@@ -50,7 +50,8 @@
                      sqs-ext-client
                      @fixtures/test-queue-url
                      c
-                     {:auto-delete true})))]
+                     {:auto-delete true}
+                     {})))]
 
       (is (= n (count stop-receive-loops)))
       (is (every? fn? stop-receive-loops))

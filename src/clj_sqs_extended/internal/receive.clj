@@ -174,7 +174,7 @@
 
 (defn receive-loop
   ([sqs-ext-client queue-url out-chan]
-   (receive-loop sqs-ext-client queue-url out-chan {}))
+   (receive-loop sqs-ext-client queue-url out-chan {} {}))
 
   ([sqs-ext-client
     queue-url
@@ -182,12 +182,16 @@
     {:keys [auto-delete
             restart-delay-seconds
             restart-limit]
-     :as   receive-opts}]
+     :as   receive-opts}
+    {:keys [max-number-of-receiving-messages]
+     :or   {max-number-of-receiving-messages 1}
+     :as   sqs-opts}]
    (let [receive-loop-running? (atom true)
-         create-new-receiving-chan-fn #(sqs/receive-to-channel
-                                         sqs-ext-client
-                                         queue-url
-                                         {})]
+         create-new-receiving-chan-fn
+         #(sqs/receive-to-channel
+            sqs-ext-client
+            queue-url
+            sqs-opts)]
      (go-loop
        [loop-stats        (init-receive-loop-stats)
         receiving-chan    (create-new-receiving-chan-fn)

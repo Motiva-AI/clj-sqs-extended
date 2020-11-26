@@ -188,10 +188,8 @@
           (bean)
           (select-keys [:messageId :receiptHandle :body])))
 
-(def ^:private max-number-of-receiving-messages (int 10))
-
 (defn- receive-messages-request
-  [queue-url wait-time-in-seconds]
+  [queue-url wait-time-in-seconds max-number-of-receiving-messages]
   (doto (ReceiveMessageRequest. queue-url)
       (.setWaitTimeSeconds (int wait-time-in-seconds))
       ;; this below is to satisfy some quirk with SQS for our custom serdes-format attribute to be received
@@ -199,8 +197,10 @@
       (.setMaxNumberOfMessages max-number-of-receiving-messages)))
 
 (defn wait-and-receive-messages-from-sqs
-  [sqs-client queue-url wait-time-in-seconds]
-  (->> (receive-messages-request queue-url wait-time-in-seconds)
+  [sqs-client queue-url
+   {wait-time-in-seconds             :wait-time-in-seconds
+    max-number-of-receiving-messages :max-number-of-receiving-messages}]
+  (->> (receive-messages-request queue-url wait-time-in-seconds max-number-of-receiving-messages)
        (.receiveMessage sqs-client)
        (.getMessages)))
 
@@ -227,7 +227,8 @@
    (receive-messages sqs-client queue-url {}))
 
   ([sqs-client queue-url
-    {:keys [wait-time-in-seconds]
+    {:keys [wait-time-in-seconds
+            max-number-of-receiving-messages]
      ;; Defaults to maximum long polling
      ;; https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-short-and-long-polling.html#sqs-long-polling
      :or   {wait-time-in-seconds 20}}]
@@ -236,7 +237,8 @@
        (->> (wait-and-receive-messages-from-sqs
               sqs-client
               queue-url
-              wait-time-in-seconds)
+              {:wait-time-in-seconds             wait-time-in-seconds
+               :max-number-of-receiving-messages max-number-of-receiving-messages})
             (map parse-message)
             (map deserialize-message-if-formatted))
        (catch Throwable ex
@@ -254,7 +256,9 @@
   `(throw-err (clojure.core.async/<!! ~channel)))
 
 (defn receive-to-channel
-  [sqs-client queue-url opts]
+  [sqs-client queue-url
+   {:keys [max-number-of-receiving-messages]
+    :as opts}]
   (let [ch (chan max-number-of-receiving-messages)]
     (async/thread
       (try
