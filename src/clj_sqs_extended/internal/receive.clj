@@ -183,8 +183,8 @@
             restart-delay-seconds
             restart-limit]
      :as   receive-opts}
-    {:keys [max-number-of-receiving-messages
-            wait-time-in-seconds]
+    {:keys [max-number-of-receiving-messages]
+     :or   {max-number-of-receiving-messages 1}
      :as   sqs-opts}]
    (let [receive-loop-running? (atom true)
          create-new-receiving-chan-fn

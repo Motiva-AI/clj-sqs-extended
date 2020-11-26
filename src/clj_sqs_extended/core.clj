@@ -103,7 +103,8 @@
                   handler-chan
                   {:auto-delete           auto-delete
                    :restart-limit         restart-limit
-                   :restart-delay-seconds restart-delay-seconds})]
+                   :restart-delay-seconds restart-delay-seconds}
+                  {})]
     (log/infof (str "Handling queue '%s' with bucket [%s], "
                     "number-of-handler-threads [%d], "
                     "restart-limit [%d], "

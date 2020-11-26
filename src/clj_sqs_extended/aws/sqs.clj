@@ -258,7 +258,6 @@
 (defn receive-to-channel
   [sqs-client queue-url
    {:keys [max-number-of-receiving-messages]
-    :or {max-number-of-receiving-messages 1}
     :as opts}]
   (let [ch (chan max-number-of-receiving-messages)]
     (async/thread
