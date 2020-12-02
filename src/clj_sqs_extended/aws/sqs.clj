@@ -15,7 +15,8 @@
             MessageAttributeValue
             PurgeQueueRequest
             ReceiveMessageRequest
-            SendMessageRequest]))
+            SendMessageRequest
+            GetQueueAttributesRequest]))
 
 
 ;; WATCHOUT: Refer to https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-message-metadata.html
@@ -104,6 +105,23 @@
   [sqs-client queue-url]
   (->> (PurgeQueueRequest. queue-url)
        (.purgeQueue sqs-client)))
+
+(defn- map-vals [f m]
+  (into {} (for [[k v] m] [k (f v)])))
+
+(defn queue-attributes
+  ([sqs-client queue-url]
+   (->> (queue-attributes
+          sqs-client
+          queue-url
+          ["ApproximateNumberOfMessages"
+           "ApproximateNumberOfMessagesNotVisible"])
+        (map-vals #(Integer/parseInt %))))
+
+  ([sqs-client queue-url attribute-names]
+   (->> (GetQueueAttributesRequest. queue-url attribute-names)
+        (.getQueueAttributes sqs-client)
+        (.getAttributes))))
 
 (defn send-message
   "Send a message to a standard queue.
@@ -194,7 +212,7 @@
       (.setWaitTimeSeconds (int wait-time-in-seconds))
       ;; this below is to satisfy some quirk with SQS for our custom serdes-format attribute to be received
       (.setMessageAttributeNames [clj-sqs-ext-format-attribute])
-      (.setMaxNumberOfMessages max-number-of-receiving-messages)))
+      (.setMaxNumberOfMessages (when max-number-of-receiving-messages (int max-number-of-receiving-messages)))))
 
 (defn wait-and-receive-messages-from-sqs
   [sqs-client queue-url
