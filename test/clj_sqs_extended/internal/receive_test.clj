@@ -71,3 +71,46 @@
       ;; gives time for the receive-loop to stop
       (Thread/sleep 500))))
 
+(deftest only-acknowledge-messages-that-handler-is-available-to-process
+  (fixtures/with-test-standard-queue
+    (let [n        5
+          messages (into [] (take n (repeatedly helpers/random-message-basic)))
+          c        (chan)
+
+          sqs-ext-client
+          (sqs/sqs-ext-client fixtures/sqs-ext-config)
+
+          ;; setup
+          stop-receive-loop
+          (receive/receive-loop
+            sqs-ext-client
+            @fixtures/test-queue-url
+            c
+            {:auto-delete false}
+            {:max-number-of-receiving-messages 1
+             :wait-time-in-seconds             1})]
+
+      (is (fn? stop-receive-loop))
+      (is (= {"ApproximateNumberOfMessages" 0, "ApproximateNumberOfMessagesNotVisible" 0}
+             (sqs/queue-attributes sqs-ext-client @fixtures/test-queue-url)))
+
+      (doseq [msg messages]
+        (sqs/send-message sqs-ext-client @fixtures/test-queue-url msg))
+
+      (is (= {"ApproximateNumberOfMessages" (- n 2), "ApproximateNumberOfMessagesNotVisible" 2}
+             (sqs/queue-attributes sqs-ext-client @fixtures/test-queue-url)))
+
+      (let [[out _] (alts!! [c (timeout 1000)])]
+        (is (:body out))
+        (is ((:done-fn out))))
+
+      (is (= {"ApproximateNumberOfMessages" (- n 2) , "ApproximateNumberOfMessagesNotVisible" 1}
+             (sqs/queue-attributes sqs-ext-client @fixtures/test-queue-url)))
+
+      ;; teardown
+      (stop-receive-loop)
+      (close! c)
+
+      ;; gives time for the receive-loop to stop
+      (Thread/sleep 500))))
+
