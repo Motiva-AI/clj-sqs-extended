@@ -48,8 +48,9 @@
 
 (defn- restart-limit-reached?
   [loop-state limit]
-  (> (:restart-count loop-state)
-     limit))
+  (when limit
+    (> (:restart-count loop-state)
+       limit)))
 
 (defn- raise-receive-loop-error [queue-url error]
   (throw (ex-info
@@ -127,7 +128,8 @@
    ^clojure.lang.Atom receive-loop-running?
    ^clojure.lang.Atom pause-and-restart-for-error?
    {restart-delay-seconds :restart-delay-seconds
-    restart-limit         :restart-limit}
+    restart-limit         :restart-limit
+    :or {restart-delay-seconds 1}}
    error]
   (if-not (continue-after-message-receival-error? loop-stats restart-limit)
     (do
