@@ -250,38 +250,27 @@
      ;; Defaults to maximum long polling
      ;; https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-short-and-long-polling.html#sqs-long-polling
      :or   {wait-time-in-seconds 20}}]
-   (async/thread ;; do not use a go-block here because https://eli.thegreenplace.net/2017/clojure-concurrency-and-blocking-with-coreasync/
-     (try
-       (->> (wait-and-receive-messages-from-sqs
-              sqs-client
-              queue-url
-              {:wait-time-in-seconds             wait-time-in-seconds
-               :max-number-of-receiving-messages max-number-of-receiving-messages})
-            (map parse-message)
-            (map deserialize-message-if-formatted))
-       (catch Throwable ex
-         ;; returns exception
-         ex)))))
-
-(defn- throw-err [x]
-  (when (instance? Exception x)
-    (throw x))
-  x)
-
-(defmacro <??
-  "Same as <! but throws error if an error is returned from channel"
-  [channel]
-  `(throw-err (clojure.core.async/<!! ~channel)))
+   (try
+     (->> (wait-and-receive-messages-from-sqs
+            sqs-client
+            queue-url
+            {:wait-time-in-seconds             wait-time-in-seconds
+             :max-number-of-receiving-messages max-number-of-receiving-messages})
+          (map parse-message)
+          (map deserialize-message-if-formatted))
+     (catch Throwable ex
+       ;; returns exception
+       ex))))
 
 (defn receive-to-channel
   [sqs-client queue-url
    {:keys [max-number-of-receiving-messages]
     :as opts}]
   (let [ch (chan max-number-of-receiving-messages)]
-    (async/thread
+    (async/thread ;; do not use a go-block here because https://eli.thegreenplace.net/2017/clojure-concurrency-and-blocking-with-coreasync/
       (try
         (loop []
-          (let [messages (<?? (receive-messages sqs-client queue-url opts))]
+          (let [messages (receive-messages sqs-client queue-url opts)]
             (when-not (empty? messages)
               (<!! (async/onto-chan! ch messages false))))
 
