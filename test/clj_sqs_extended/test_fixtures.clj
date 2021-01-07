@@ -35,14 +35,14 @@
 
 (defn wrap-standard-queue
   [opts f]
-  (let [queue-url (sqs-ext/create-standard-queue!
-                    sqs-ext-config
+  (let [queue-url (sqs/create-standard-queue!
+                    @test-sqs-ext-client
                     (test-standard-queue-name)
                     opts)]
     (reset! test-queue-url queue-url)
     (f)
     (Thread/sleep 200) ;; wait for receive-loop to finish in the background
-    (sqs-ext/delete-queue! sqs-ext-config queue-url)))
+    (sqs/delete-queue! @test-sqs-ext-client queue-url)))
 
 (defmacro with-test-standard-queue
   [& body]
@@ -56,14 +56,13 @@
 
 (defn wrap-fifo-queue
   [f]
-  (let [queue-url (sqs-ext/create-fifo-queue!
-                    sqs-ext-config
+  (let [queue-url (sqs/create-fifo-queue!
+                    @test-sqs-ext-client
                     (test-fifo-queue-name))]
     (reset! test-queue-url queue-url)
     (f)
     (Thread/sleep 200) ;; wait for receive-loop to finish in the background
-    (sqs-ext/delete-queue! sqs-ext-config
-                           queue-url)))
+    (sqs/delete-queue! @test-sqs-ext-client queue-url)))
 
 (defmacro with-test-fifo-queue
   [& body]
@@ -79,9 +78,11 @@
 (defn wrap-handle-queue
   [handler-chan settings f]
   (let [handler-config (merge {:queue-url @test-queue-url} (:handler-opts settings))
-        stop-fn (sqs-ext/handle-queue (merge sqs-ext-config (:sqs-ext-config settings))
-                                      handler-config
-                                      (partial test-handler-fn handler-chan))]
+        stop-fn (sqs-ext/handle-queue
+                  (sqs-ext/sqs-ext-client
+                    (merge sqs-ext-config (:sqs-ext-config settings)))
+                  handler-config
+                  (partial test-handler-fn handler-chan))]
     (f)
     (if (:auto-stop-loop settings)
       (do

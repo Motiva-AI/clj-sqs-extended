@@ -29,7 +29,25 @@
         (.withStringValue (str (name format)))))
 
 (defn sqs-ext-client
-  [sqs-ext-config]
+  "Takes a map of configuration and returns a client object.
+
+   Arguments:
+
+   A map of the following optional keys used for accessing AWS services:
+     access-key     - AWS access key ID
+     secret-key     - AWS secret access key
+     s3-endpoint    - AWS S3 endpoint (protocol://service-code.region-code.amazonaws.com)
+     s3-bucket-name - AWS S3 bucket to use to store messages larger than 256kb (optional)
+     sqs-endpoint   - AWS SQS endpoint (protocol://service-code.region-code.amazonaws.com)
+     region         - AWS region
+  "
+  [{:keys [access-key
+           secret-key
+           s3-endpoint
+           s3-bucket-name
+           sqs-endpoint
+           region]
+    :as   sqs-ext-config}]
   (let [endpoint (aws/configure-sqs-endpoint sqs-ext-config)
         creds (aws/configure-credentials sqs-ext-config)
         s3-client (when (:s3-bucket-name sqs-ext-config)
@@ -271,7 +289,7 @@
       (try
         (loop []
           (let [messages (receive-messages sqs-client queue-url opts)]
-            (when-not (empty? messages)
+            (when (seq messages)
               (<!! (async/onto-chan! ch messages false))))
 
           (when-not (async-protocols/closed? ch)
