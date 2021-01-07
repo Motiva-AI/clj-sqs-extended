@@ -13,13 +13,54 @@
            [com.amazonaws.services.sqs.model AmazonSQSException]
            [java.net.http HttpTimeoutException]))
 
+;; fixtures ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (use-fixtures :once fixtures/with-test-sqs-ext-client fixtures/with-test-s3-bucket)
 (use-fixtures :each fixtures/with-transient-queue)
+
+(defonce test-handler-done-fn (atom nil))
+
+(defn test-handler-fn
+  ([chan message]
+   (>!! chan message))
+  ([chan message done-fn]
+   (reset! test-handler-done-fn done-fn)
+   (>!! chan message)))
+
+(defn wrap-handle-queue
+  [handler-chan settings f]
+  (let [handler-config (merge {:queue-url @fixtures/test-queue-url} (:handler-opts settings))
+        stop-fn (sqs-ext/handle-queue
+                  (sqs-ext/sqs-ext-client
+                    (merge fixtures/sqs-ext-config (:sqs-ext-config settings)))
+                  handler-config
+                  (partial test-handler-fn handler-chan))]
+    (f)
+    (if (:auto-stop-loop settings)
+      (do
+        (stop-fn)
+        ;; wait for receive-loop async teardown
+        (Thread/sleep 100))
+      stop-fn)))
+
+(defmacro with-handle-queue-defaults
+  ([handler-chan & body]
+   `(wrap-handle-queue ~handler-chan
+                       {:auto-stop-loop true}
+                       (fn [] ~@body))))
+
+(defmacro with-handle-queue
+  ([handler-chan settings & body]
+   `(wrap-handle-queue ~handler-chan
+                       (merge {:auto-stop-loop true} ~settings)
+                       (fn [] ~@body))))
 
 (defonce test-messages-basic
          (into [] (take 5 (repeatedly helpers/random-message-basic))))
 (defonce test-message-with-time (helpers/random-message-with-time))
 (defonce test-message-large (helpers/random-message-larger-than-256kb))
+
+;; tests ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (deftest send-nil-body-message-yields-exception
   (testing "Sending a standard message with a nil body yields exception"
@@ -60,7 +101,7 @@
 
 (deftest handle-queue-sends-and-receives-basic-messages
   (let [handler-chan (chan)]
-    (fixtures/with-handle-queue-defaults
+    (with-handle-queue-defaults
       handler-chan
 
       (testing "handle-queue can send/receive basic messages to standard queue"
@@ -89,7 +130,7 @@
         sqs-ext-client-without-bucket (sqs/sqs-ext-client
                                         (dissoc fixtures/sqs-ext-config
                                                 :s3-bucket-name))]
-    (fixtures/with-handle-queue
+    (with-handle-queue
       handler-chan
       {:sqs-ext-config {:s3-bucket-name nil}}
 
@@ -105,7 +146,7 @@
 
 (deftest handle-queue-sends-and-receives-timestamped-message
   (let [handler-chan (chan)]
-    (fixtures/with-handle-queue-defaults
+    (with-handle-queue-defaults
       handler-chan
 
       (is (string? (sqs-ext/send-message @fixtures/test-sqs-ext-client
@@ -117,7 +158,7 @@
 (deftest handle-queue-sends-and-receives-fifo-messages
   (let [handler-chan (chan)
         message (first test-messages-basic)]
-    (fixtures/with-handle-queue-defaults
+    (with-handle-queue-defaults
       handler-chan
 
       (is (string? (sqs-ext/send-fifo-message @fixtures/test-sqs-ext-client
@@ -131,7 +172,7 @@
 #_(deftest handle-queue-terminates-with-non-existing-bucket
   (let [handler-chan (chan)]
     (bond/with-spy [receive/stop-receive-loop!]
-      (fixtures/with-handle-queue
+      (with-handle-queue
         handler-chan
         {:sqs-ext-config {:s3-bucket-name "non-existing-bucket"}}
 
@@ -158,7 +199,7 @@
       (with-redefs-fn {#'sqs/wait-and-receive-messages-from-sqs
                        (fn [_ _ _] (throw (HttpTimeoutException.
                                             "Testing permanent network failure")))}
-        #(fixtures/with-handle-queue
+        #(with-handle-queue
            handler-chan
            {:handler-opts {:restart-limit         restart-limit
                            :restart-delay-seconds restart-delay-seconds}}
@@ -194,7 +235,7 @@
                          (wait-and-receive-messages-from-sqs sqs-client queue-url wait-time-in-seconds)))}
       #(bond/with-spy [receive/pause-to-recover-this-loop]
          (let [restart-delay-seconds 1]
-           (fixtures/with-handle-queue
+           (with-handle-queue
              handler-chan
              {:handler-opts   {:restart-delay-seconds restart-delay-seconds}}
 
@@ -215,9 +256,9 @@
     (close! handler-chan)))
 
 (deftest manually-deleted-messages-dont-get-resent
-  (bond/with-spy [fixtures/test-handler-fn]
+  (bond/with-spy [test-handler-fn]
     (let [handler-chan (chan)]
-      (fixtures/with-handle-queue
+      (with-handle-queue
         handler-chan
         {:handler-opts {:auto-delete false}}
 
@@ -231,11 +272,11 @@
 
           ;; delete function handle is returned as last argument ...
           (let [test-handler-fn-args
-                (-> fixtures/test-handler-fn bond/calls first :args)]
+                (-> test-handler-fn bond/calls first :args)]
             (is (fn? (last test-handler-fn-args))))
 
           ;; delete it manually now ...
-          (@fixtures/test-handler-done-fn)
+          (@test-handler-done-fn)
 
           ;; verify its not received again ...
           (is (alt!!
@@ -245,11 +286,11 @@
       (close! handler-chan))))
 
 (deftest messages-get-resent-if-not-deleted-manually-and-auto-delete-is-false
-  (bond/with-spy [fixtures/test-handler-fn]
+  (bond/with-spy [test-handler-fn]
     (let [handler-chan (chan)
           message      (last test-messages-basic)
           visibility-timeout 1]
-      (fixtures/with-handle-queue
+      (with-handle-queue
         handler-chan
         {:handler-opts {:auto-delete false}}
 
@@ -261,7 +302,7 @@
         (is (= message (timed-take!! handler-chan)))
 
         ;; delete function handle is returned as last argument ...
-        (is (fn? (-> fixtures/test-handler-fn bond/calls last :args last)))
+        (is (fn? (-> test-handler-fn bond/calls last :args last)))
 
         ;; nothing comes out of the channel within the visibility timeout ...
         (is (alt!!
@@ -292,11 +333,11 @@
           (recur))))))
 
 (deftest message-is-auto-deleted-when-auto-delete-is-true
-  (bond/with-spy [fixtures/test-handler-fn]
+  (bond/with-spy [test-handler-fn]
     (let [handler-chan (chan)]
       (with-redefs-fn {#'sqs-ext/launch-handler-threads
                        launch-handler-threads-with-complete-sqs-message-forwarding}
-        #(fixtures/with-handle-queue
+        #(with-handle-queue
            handler-chan
            {:handler-opts {:auto-delete true}}
 
@@ -309,7 +350,7 @@
 
              ;; no delete function handle has been passed as last argument ...
              (let [test-handler-fn-args
-                   (-> fixtures/test-handler-fn bond/calls first :args)]
+                   (-> test-handler-fn bond/calls first :args)]
                (is (not (fn? (last test-handler-fn-args)))))
 
              ;; not sure why this is needed, but otherwise the next check

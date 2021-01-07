@@ -18,7 +18,6 @@
 (defonce test-queue-url (atom nil))
 (def test-standard-queue-name helpers/random-queue-name)
 (def test-fifo-queue-name (partial helpers/random-queue-name {:suffix ".fifo"}))
-(defonce test-handler-done-fn (atom nil))
 
 (defn with-test-s3-bucket
   [f]
@@ -43,37 +42,3 @@
     (Thread/sleep 200) ;; wait for receive-loop to finish in the background
     (sqs/delete-queue! @test-sqs-ext-client queue-url)))
 
-(defn test-handler-fn
-  ([chan message]
-   (>!! chan message))
-  ([chan message done-fn]
-   (reset! test-handler-done-fn done-fn)
-   (>!! chan message)))
-
-(defn wrap-handle-queue
-  [handler-chan settings f]
-  (let [handler-config (merge {:queue-url @test-queue-url} (:handler-opts settings))
-        stop-fn (sqs-ext/handle-queue
-                  (sqs-ext/sqs-ext-client
-                    (merge sqs-ext-config (:sqs-ext-config settings)))
-                  handler-config
-                  (partial test-handler-fn handler-chan))]
-    (f)
-    (if (:auto-stop-loop settings)
-      (do
-        (stop-fn)
-        ;; wait for receive-loop async teardown
-        (Thread/sleep 100))
-      stop-fn)))
-
-(defmacro with-handle-queue-defaults
-  ([handler-chan & body]
-   `(wrap-handle-queue ~handler-chan
-                       {:auto-stop-loop true}
-                       (fn [] ~@body))))
-
-(defmacro with-handle-queue
-  ([handler-chan settings & body]
-   `(wrap-handle-queue ~handler-chan
-                       (merge {:auto-stop-loop true} ~settings)
-                       (fn [] ~@body))))
