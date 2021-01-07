@@ -1,14 +1,12 @@
 (ns clj-sqs-extended.sqs-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [bond.james :as bond]
-            [clojure.core.async :refer [<!!]]
             [clojure.tools.logging :as log]
             [clj-sqs-extended.aws.sqs :as sqs]
             [clj-sqs-extended.test-fixtures :as fixtures]
             [clj-sqs-extended.test-helpers :as helpers]))
 
-
-(use-fixtures :once fixtures/with-test-sqs-ext-client)
+(use-fixtures :once fixtures/with-test-sqs-ext-client fixtures/with-test-s3-bucket)
 
 (defonce test-messages
          (into [] (take 5 (repeatedly helpers/random-message-basic))))

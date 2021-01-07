@@ -20,15 +20,14 @@
 (def test-fifo-queue-name (partial helpers/random-queue-name {:suffix ".fifo"}))
 (defonce test-handler-done-fn (atom nil))
 
-(defn with-test-sqs-ext-client
+(defn with-test-s3-bucket
   [f]
   (let [s3-client (s3/s3-client sqs-ext-config)]
     (s3/create-bucket! s3-client (:s3-bucket-name sqs-ext-config))
-    (reset! test-sqs-ext-client (sqs/sqs-ext-client sqs-ext-config))
     (f)
     (s3/purge-bucket! s3-client (:s3-bucket-name sqs-ext-config))))
 
-(defn with-test-sqs-ext-client-no-s3
+(defn with-test-sqs-ext-client
   [f]
   (reset! test-sqs-ext-client (sqs/sqs-ext-client sqs-ext-config))
   (f))
