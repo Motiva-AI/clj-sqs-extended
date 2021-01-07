@@ -13,7 +13,7 @@
            [com.amazonaws.services.sqs.model AmazonSQSException]
            [java.net.http HttpTimeoutException]))
 
-(use-fixtures :once fixtures/with-test-sqs-ext-client)
+(use-fixtures :once fixtures/with-test-sqs-ext-client fixtures/with-test-s3-bucket)
 
 (defonce test-messages-basic
          (into [] (take 5 (repeatedly helpers/random-message-basic))))

@@ -7,7 +7,7 @@
             [clj-sqs-extended.aws.sqs :as sqs]
             [clj-sqs-extended.internal.receive :as receive]))
 
-(use-fixtures :once fixtures/with-test-sqs-ext-client)
+(use-fixtures :once fixtures/with-test-sqs-ext-client fixtures/with-test-s3-bucket)
 
 (deftest nil-returned-after-loop-was-terminated
   (fixtures/with-test-standard-queue
