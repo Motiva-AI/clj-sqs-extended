@@ -1,21 +1,15 @@
 (ns clj-sqs-extended.core
   (:require [clojure.core.async :refer [chan <!! thread]]
             [clojure.tools.logging :as log]
-            [clj-sqs-extended.internal.core :refer [provide-with-auto-client-from-config]]
+
             [clj-sqs-extended.internal.receive :as receive]
             [clj-sqs-extended.aws.sqs :as sqs]))
 
 
 ;; Conveniance declarations
-(provide-with-auto-client-from-config create-standard-queue! sqs/create-standard-queue!)
-(provide-with-auto-client-from-config create-fifo-queue!     sqs/create-fifo-queue!)
-(provide-with-auto-client-from-config purge-queue!           sqs/purge-queue!)
-(provide-with-auto-client-from-config delete-queue!          sqs/delete-queue!)
-(provide-with-auto-client-from-config send-message           sqs/send-message)
-(provide-with-auto-client-from-config send-fifo-message      sqs/send-fifo-message)
-(provide-with-auto-client-from-config delete-message!        sqs/delete-message!)
-
-(provide-with-auto-client-from-config receive-loop receive/receive-loop)
+(def sqs-ext-client    sqs/sqs-ext-client)
+(def send-message      sqs/send-message)
+(def send-fifo-message sqs/send-fifo-message)
 
 (defn- launch-handler-threads
   [number-of-handler-threads handler-chan auto-delete handler-fn]
@@ -37,14 +31,7 @@
   "Setup a loop that listens to a queue and processes all incoming messages.
 
   Arguments:
-    sqs-ext-config - A map of the following optional keys used for accessing AWS services:
-      access-key     - AWS access key ID
-      secret-key     - AWS secret access key
-      s3-endpoint    - AWS S3 endpoint (protocol://service-code.region-code.amazonaws.com)
-      s3-bucket-name - AWS S3 bucket to use to store messages larger than 256kb (optional)
-      sqs-endpoint   - AWS SQS endpoint (protocol://service-code.region-code.amazonaws.com)
-      region         - AWS region
-
+    sqs-ext-client - A client object from calling (sqs-ext-client config)
     handler-opts - A map for the queue handling settings:
       queue-url                 - A string containing the unique URL of the queue to handle (required)
       number-of-handler-threads - Number of how many threads to run for handling message receival
@@ -77,13 +64,7 @@
                        :last-iteration-started-at  A tick instant timestamp when the loop began last
                        :stopped-at                 A tick instant timestamp when the loop was stopped
                        :last-loop-duration-in-seconds} Last loop's running time in seconds"
-  [{:keys [access-key
-           secret-key
-           s3-endpoint
-           s3-bucket-name
-           sqs-endpoint
-           region]
-    :as   sqs-ext-config}
+  [sqs-ext-client
    {:keys [queue-url
            number-of-handler-threads
            restart-limit
@@ -94,9 +75,7 @@
            restart-delay-seconds     10
            auto-delete               true}}
    handler-fn]
-  (let [sqs-ext-client (sqs/sqs-ext-client sqs-ext-config)
-        handler-chan (chan)
-
+  (let [handler-chan (chan)
         stop-fn (receive/receive-loop
                   sqs-ext-client
                   queue-url
@@ -105,13 +84,12 @@
                    :restart-limit         restart-limit
                    :restart-delay-seconds restart-delay-seconds}
                   {})]
-    (log/infof (str "Handling queue '%s' with bucket [%s], "
+    (log/infof (str "Handling queue '%s' with: "
                     "number-of-handler-threads [%d], "
                     "restart-limit [%d], "
                     "restart-delay-seconds [%d], "
                     "auto-delete [%s].")
                queue-url
-               s3-bucket-name
                number-of-handler-threads
                restart-limit
                restart-delay-seconds
@@ -121,3 +99,4 @@
                             auto-delete
                             handler-fn)
     stop-fn))
+
