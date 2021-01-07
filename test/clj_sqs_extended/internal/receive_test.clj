@@ -40,14 +40,11 @@
           n       10
           c       (chan)
 
-          sqs-ext-client
-          (sqs/sqs-ext-client fixtures/sqs-ext-config)
-
           ;; setup
           stop-receive-loops
           (doall (for [_ (range n)]
                    (receive/receive-loop
-                     sqs-ext-client
+                     @fixtures/test-sqs-ext-client
                      @fixtures/test-queue-url
                      c
                      {:auto-delete true}
@@ -56,7 +53,7 @@
       (is (= n (count stop-receive-loops)))
       (is (every? fn? stop-receive-loops))
 
-      (is (sqs/send-message sqs-ext-client
+      (is (sqs/send-message @fixtures/test-sqs-ext-client
                             @fixtures/test-queue-url
                             message))
 
@@ -77,13 +74,10 @@
           messages (into [] (take n (repeatedly helpers/random-message-basic)))
           c        (chan)
 
-          sqs-ext-client
-          (sqs/sqs-ext-client fixtures/sqs-ext-config)
-
           ;; setup
           stop-receive-loop
           (receive/receive-loop
-            sqs-ext-client
+            @fixtures/test-sqs-ext-client
             @fixtures/test-queue-url
             c
             {:auto-delete false}
@@ -92,10 +86,11 @@
 
       (is (fn? stop-receive-loop))
       (is (= {"ApproximateNumberOfMessages" 0, "ApproximateNumberOfMessagesNotVisible" 0}
-             (sqs/queue-attributes sqs-ext-client @fixtures/test-queue-url)))
+             (sqs/queue-attributes @fixtures/test-sqs-ext-client @fixtures/test-queue-url)))
+
 
       (doseq [msg messages]
-        (sqs/send-message sqs-ext-client @fixtures/test-queue-url msg))
+        (sqs/send-message @fixtures/test-sqs-ext-client @fixtures/test-queue-url msg))
 
       ;; these expected values require some explanation:
       ;; 1. one message is read off the queue and become NotVisible
@@ -113,7 +108,7 @@
       ;; receive-messages from the queue. This can be hotfixed by adding a
       ;; brief sleep in receive-to-channel but I'd rather not do that.
       (is (= {"ApproximateNumberOfMessages" (- n 3), "ApproximateNumberOfMessagesNotVisible" 3}
-             (sqs/queue-attributes sqs-ext-client @fixtures/test-queue-url)))
+             (sqs/queue-attributes @fixtures/test-sqs-ext-client @fixtures/test-queue-url)))
 
       (let [[out _] (alts!! [c (timeout 1000)])]
         (is (:body out))
@@ -121,7 +116,7 @@
       (Thread/sleep 100) ;; wait for message to be deleted
 
       (is (= {"ApproximateNumberOfMessages" (- n 4) , "ApproximateNumberOfMessagesNotVisible" 3}
-             (sqs/queue-attributes sqs-ext-client @fixtures/test-queue-url)))
+             (sqs/queue-attributes @fixtures/test-sqs-ext-client @fixtures/test-queue-url)))
 
       ;; teardown
       (stop-receive-loop)
