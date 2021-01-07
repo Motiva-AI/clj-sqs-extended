@@ -37,7 +37,7 @@
   (let [queue-url (sqs/create-standard-queue!
                     @test-sqs-ext-client
                     (test-standard-queue-name)
-                    opts)]
+                    {:visibility-timeout-in-seconds 1})]
     (reset! test-queue-url queue-url)
     (f)
     (Thread/sleep 200) ;; wait for receive-loop to finish in the background

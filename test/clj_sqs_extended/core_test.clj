@@ -260,9 +260,7 @@
     (let [handler-chan (chan)
           message      (last test-messages-basic)
           visibility-timeout 1]
-      (fixtures/with-test-standard-queue-opts
-        {:visibility-timeout-in-seconds visibility-timeout}
-
+      (fixtures/with-test-standard-queue
         (fixtures/with-handle-queue
           handler-chan
           {:handler-opts {:auto-delete false}}
