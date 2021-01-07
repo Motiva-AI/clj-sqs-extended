@@ -32,40 +32,16 @@
   (reset! test-sqs-ext-client (sqs/sqs-ext-client sqs-ext-config))
   (f))
 
-(defn wrap-standard-queue
-  [opts f]
+(defn with-transient-queue
+  [f]
   (let [queue-url (sqs/create-standard-queue!
                     @test-sqs-ext-client
                     (test-standard-queue-name)
-                    opts)]
+                    {:visibility-timeout-in-seconds 1})]
     (reset! test-queue-url queue-url)
     (f)
     (Thread/sleep 200) ;; wait for receive-loop to finish in the background
     (sqs/delete-queue! @test-sqs-ext-client queue-url)))
-
-(defmacro with-test-standard-queue
-  [& body]
-  `(wrap-standard-queue {}
-                        (fn [] ~@body)))
-
-(defmacro with-test-standard-queue-opts
-  [opts & body]
-  `(wrap-standard-queue ~opts
-                        (fn [] ~@body)))
-
-(defn wrap-fifo-queue
-  [f]
-  (let [queue-url (sqs/create-fifo-queue!
-                    @test-sqs-ext-client
-                    (test-fifo-queue-name))]
-    (reset! test-queue-url queue-url)
-    (f)
-    (Thread/sleep 200) ;; wait for receive-loop to finish in the background
-    (sqs/delete-queue! @test-sqs-ext-client queue-url)))
-
-(defmacro with-test-fifo-queue
-  [& body]
-  `(wrap-fifo-queue (fn [] ~@body)))
 
 (defn test-handler-fn
   ([chan message]

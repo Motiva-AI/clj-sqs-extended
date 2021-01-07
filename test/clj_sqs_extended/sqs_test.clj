@@ -7,6 +7,7 @@
             [clj-sqs-extended.test-helpers :as helpers]))
 
 (use-fixtures :once fixtures/with-test-sqs-ext-client fixtures/with-test-s3-bucket)
+(use-fixtures :each fixtures/with-transient-queue)
 
 (defonce test-messages
          (into [] (take 5 (repeatedly helpers/random-message-basic))))
@@ -15,24 +16,22 @@
 
 (deftest can-receive-message-when-idle
   (testing "Receive empty response when no message has been send before"
-    (fixtures/with-test-standard-queue
-      (let [response (sqs/receive-messages @fixtures/test-sqs-ext-client
-                                           @fixtures/test-queue-url)]
-        (is (empty? response))))))
+    (let [response (sqs/receive-messages @fixtures/test-sqs-ext-client
+                                         @fixtures/test-queue-url)]
+      (is (empty? response)))))
 
 (deftest can-receive-message
   (testing "Sending/Receiving basic maps"
-    (fixtures/with-test-standard-queue
-      (let [test-message (first test-messages)]
-        (doseq [format [:transit :json]]
-          (log/infof "Message sent. ID: '%s'"
-                     (sqs/send-message @fixtures/test-sqs-ext-client
-                                       @fixtures/test-queue-url
-                                       test-message
-                                       {:format format}))
-          (let [response (sqs/receive-messages @fixtures/test-sqs-ext-client
-                                               @fixtures/test-queue-url)]
-            (is (= [test-message] (map :body response)))))))))
+    (let [test-message (first test-messages)]
+      (doseq [format [:transit :json]]
+        (log/infof "Message sent. ID: '%s'"
+                   (sqs/send-message @fixtures/test-sqs-ext-client
+                                     @fixtures/test-queue-url
+                                     test-message
+                                     {:format format}))
+        (let [response (sqs/receive-messages @fixtures/test-sqs-ext-client
+                                             @fixtures/test-queue-url)]
+          (is (= [test-message] (map :body response))))))))
 
 (deftest safely-receive-nil-message
   ;; sqs/wait-and-receive-messages-from-sqs returns an empty list when
@@ -41,35 +40,32 @@
   ;; Reference:
   ;; See WaitTimeSeconds section in
   ;; https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_ReceiveMessage.html#API_ReceiveMessage_ResponseElements
-  (fixtures/with-test-standard-queue
-    (bond/with-stub! [[sqs/wait-and-receive-messages-from-sqs (constantly [])]]
-      ;; ensure that this doesn't crash
-      (is (empty? (sqs/receive-messages @fixtures/test-sqs-ext-client
-                                        @fixtures/test-queue-url))))))
+  (bond/with-stub! [[sqs/wait-and-receive-messages-from-sqs (constantly [])]]
+    ;; ensure that this doesn't crash
+    (is (empty? (sqs/receive-messages @fixtures/test-sqs-ext-client
+                                      @fixtures/test-queue-url)))))
 
 (deftest can-receive-fifo-message
-  (fixtures/with-test-fifo-queue
-    (doseq [format [:transit :json]]
-      (let [test-message (first test-messages)]
-        (sqs/send-fifo-message @fixtures/test-sqs-ext-client
-                               @fixtures/test-queue-url
-                               test-message
-                               (helpers/random-group-id)
-                               {:format format})
+  (doseq [format [:transit :json]]
+    (let [test-message (first test-messages)]
+      (sqs/send-fifo-message @fixtures/test-sqs-ext-client
+                             @fixtures/test-queue-url
+                             test-message
+                             (helpers/random-group-id)
+                             {:format format})
 
-        (let [response (sqs/receive-messages @fixtures/test-sqs-ext-client
-                                             @fixtures/test-queue-url)]
-          (is (= [test-message] (map :body response))))))))
+      (let [response (sqs/receive-messages @fixtures/test-sqs-ext-client
+                                           @fixtures/test-queue-url)]
+        (is (= [test-message] (map :body response)))))))
 
 (deftest can-send-message-larger-than-256kb
   (testing "Sending a message with more than 256kb of data (via S3 bucket) in raw format"
-    (fixtures/with-test-standard-queue
-      (sqs/send-message @fixtures/test-sqs-ext-client
-                        @fixtures/test-queue-url
-                        test-message-larger-than-256kb)
-      (let [response (sqs/receive-messages @fixtures/test-sqs-ext-client
-                                           @fixtures/test-queue-url)]
-        (is (= [test-message-larger-than-256kb] (map :body response)))))))
+    (sqs/send-message @fixtures/test-sqs-ext-client
+                      @fixtures/test-queue-url
+                      test-message-larger-than-256kb)
+    (let [response (sqs/receive-messages @fixtures/test-sqs-ext-client
+                                         @fixtures/test-queue-url)]
+      (is (= [test-message-larger-than-256kb] (map :body response))))))
 
 (deftest create-queue-request-attributes-attached-correctly
   (testing "Creating a queue create request with single attributes works as expected"
@@ -89,12 +85,12 @@
              "KmsDataKeyReusePeriodSeconds" "60"})))))
 
 (deftest message-without-format-attribute-is-received-correctly
-  (fixtures/with-test-standard-queue
-    (testing "A message without the format attribute gets read without error"
-      (let [plain-message (helpers/random-string-with-length 32)]
-        (.sendMessage @fixtures/test-sqs-ext-client
-                      @fixtures/test-queue-url
-                      plain-message)
-        (let [response (sqs/receive-messages @fixtures/test-sqs-ext-client
-                                             @fixtures/test-queue-url)]
-          (is (= plain-message (->> response first :body))))))))
+  (testing "A message without the format attribute gets read without error"
+    (let [plain-message (helpers/random-string-with-length 32)]
+      (.sendMessage @fixtures/test-sqs-ext-client
+                    @fixtures/test-queue-url
+                    plain-message)
+      (let [response (sqs/receive-messages @fixtures/test-sqs-ext-client
+                                           @fixtures/test-queue-url)]
+        (is (= plain-message (->> response first :body)))))))
+
