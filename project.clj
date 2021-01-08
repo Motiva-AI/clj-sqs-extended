@@ -1,4 +1,4 @@
-(defproject motiva/clj-sqs-extended "0.3.0-SNAPSHOT"
+(defproject motiva/clj-sqs-extended "0.3.0"
   :description "Clojure wrapper for https://github.com/awslabs/amazon-sqs-java-extended-client-lib"
   :url "https://github.com/Motiva-AI/clj-sqs-extended"
 
