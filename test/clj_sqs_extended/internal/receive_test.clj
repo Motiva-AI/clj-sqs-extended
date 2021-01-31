@@ -123,3 +123,10 @@
     ;; gives time for the receive-loop to stop
     (Thread/sleep 500)))
 
+(deftest receive-to-channel-test
+  (let [receiver-fn   (constantly [:foo])
+        receiver-chan (receive/receive-to-channel receiver-fn)]
+
+    (is (instance? clojure.core.async.impl.channels.ManyToManyChannel receiver-chan))
+    (is (= :foo (<!! receiver-chan)))))
+
