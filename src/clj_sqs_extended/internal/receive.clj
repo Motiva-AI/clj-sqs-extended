@@ -1,5 +1,7 @@
 (ns clj-sqs-extended.internal.receive
-  (:require [clojure.core.async :as async :refer [go-loop close! <! >!!]]
+  (:require [clojure.core.async :as async :refer [chan go-loop close! <! <!! >!!]]
+            [clojure.core.async.impl.protocols :as async-protocols]
+
             [clojure.tools.logging :as log]
             [tick.alpha.api :as t]
             [clj-sqs-extended.aws.sqs :as sqs])
@@ -174,6 +176,26 @@
     (create-new-receiving-chan-fn)
     current-receiving-chan))
 
+(defn receive-to-channel
+  [message-receiver-fn]
+  (let [ch (chan)]
+    (async/thread ;; do not use a go-block here because https://eli.thegreenplace.net/2017/clojure-concurrency-and-blocking-with-coreasync/
+      (try
+        (loop []
+          (let [messages (message-receiver-fn)]
+            (when (seq messages)
+              (<!! (async/onto-chan! ch messages false))))
+
+          (when-not (async-protocols/closed? ch)
+            (recur)))
+        (catch Throwable e
+          (>!! ch e)))
+
+      ;; close channel when exiting loop
+      (async/close! ch))
+
+    ch))
+
 (defn receive-loop
   ([sqs-ext-client queue-url out-chan]
    (receive-loop sqs-ext-client queue-url out-chan {} {}))
@@ -185,15 +207,13 @@
             restart-delay-seconds
             restart-limit]
      :as   receive-opts}
-    {:keys [max-number-of-receiving-messages]
-     :or   {max-number-of-receiving-messages 1}
-     :as   sqs-opts}]
+    sqs-opts]
    (let [receive-loop-running? (atom true)
+
          create-new-receiving-chan-fn
-         #(sqs/receive-to-channel
-            sqs-ext-client
-            queue-url
-            sqs-opts)]
+         #(receive-to-channel
+            (partial sqs/receive-messages sqs-ext-client queue-url sqs-opts))]
+
      (go-loop
        [loop-stats        (init-receive-loop-stats)
         receiving-chan    (create-new-receiving-chan-fn)

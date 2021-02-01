@@ -1,8 +1,5 @@
 (ns clj-sqs-extended.aws.sqs
-  (:require [clojure.core.async :as async :refer [chan >!! <!!]]
-            [clojure.core.async.impl.protocols :as async-protocols]
-            [clojure.tools.logging :as log]
-            [clj-sqs-extended.aws.configuration :as aws]
+  (:require [clj-sqs-extended.aws.configuration :as aws]
             [clj-sqs-extended.aws.s3 :as s3]
             [clj-sqs-extended.internal.serdes :as serdes])
   (:import [com.amazon.sqs.javamessaging
@@ -279,26 +276,4 @@
      (catch Throwable ex
        ;; returns exception
        ex))))
-
-(defn receive-to-channel
-  [sqs-client queue-url
-   {:keys [max-number-of-receiving-messages]
-    :as opts}]
-  (let [ch (chan max-number-of-receiving-messages)]
-    (async/thread ;; do not use a go-block here because https://eli.thegreenplace.net/2017/clojure-concurrency-and-blocking-with-coreasync/
-      (try
-        (loop []
-          (let [messages (receive-messages sqs-client queue-url opts)]
-            (when (seq messages)
-              (<!! (async/onto-chan! ch messages false))))
-
-          (when-not (async-protocols/closed? ch)
-            (recur)))
-        (catch Throwable e
-          (>!! ch e)))
-
-      ;; close channel when exiting loop
-      (async/close! ch))
-
-    ch))
 
