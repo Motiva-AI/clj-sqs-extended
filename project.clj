@@ -1,4 +1,4 @@
-(defproject motiva/clj-sqs-extended "0.3.0"
+(defproject motiva/clj-sqs-extended "lein-git-inject/version"
   :description "Clojure wrapper for https://github.com/awslabs/amazon-sqs-java-extended-client-lib"
   :url "https://github.com/Motiva-AI/clj-sqs-extended"
 
@@ -27,7 +27,9 @@
                                   [circleci/circleci.test "0.5.0"]
                                   [environ "1.2.0"]]
 
-                   :plugins [[lein-environ "1.2.0"]]
+                   :plugins [[lein-environ "1.2.0"]
+                             [day8/lein-git-inject "0.0.14"]]
+                   :middleware [leiningen.git-inject/middleware]
 
                    :env {:access-key             "default"
                          :secret-key             "default"
