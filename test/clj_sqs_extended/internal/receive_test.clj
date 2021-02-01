@@ -101,13 +101,7 @@
     ;;    output channel, it is blocked because the output channel is full.
     ;; 5. Thus we expect two messages to be read from the queue with
     ;;    NotVisible values = 2
-    ;;
-    ;; However, this is not the actual value. Turns out that the output
-    ;; channel isn't correctly registered as full in step 4 at the time of
-    ;; the second iteration of receive-to-channel. Thus there is an extra
-    ;; receive-messages from the queue. This can be hotfixed by adding a
-    ;; brief sleep in receive-to-channel but I'd rather not do that.
-    (is (= {"ApproximateNumberOfMessages" (- n 3), "ApproximateNumberOfMessagesNotVisible" 3}
+    (is (= {"ApproximateNumberOfMessages" (- n 2), "ApproximateNumberOfMessagesNotVisible" 2}
            (sqs/queue-attributes @fixtures/test-sqs-ext-client @fixtures/test-queue-url)))
 
     (let [[out _] (alts!! [c (timeout 1000)])]
@@ -115,7 +109,7 @@
       (is ((:done-fn out))))
     (Thread/sleep 100) ;; wait for message to be deleted
 
-    (is (= {"ApproximateNumberOfMessages" (- n 4) , "ApproximateNumberOfMessagesNotVisible" 3}
+    (is (= {"ApproximateNumberOfMessages" (- n 3) , "ApproximateNumberOfMessagesNotVisible" 2}
            (sqs/queue-attributes @fixtures/test-sqs-ext-client @fixtures/test-queue-url)))
 
     ;; teardown
