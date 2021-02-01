@@ -1,6 +1,8 @@
 (ns clj-sqs-extended.internal.receive-test
-  (:require [clojure.test :refer [deftest is are use-fixtures]]
+  (:require [clojure.test :refer [deftest is use-fixtures]]
+            [bond.james :as bond]
             [clojure.core.async :as async :refer [chan close! timeout alts!! <!!]]
+            [clojure.core.async.impl.protocols :as async-protocols]
 
             [clj-sqs-extended.test-fixtures :as fixtures]
             [clj-sqs-extended.test-helpers :as helpers]
@@ -123,10 +125,17 @@
     ;; gives time for the receive-loop to stop
     (Thread/sleep 500)))
 
-(deftest receive-to-channel-test
-  (let [receiver-fn   (constantly [:foo])
-        receiver-chan (receive/receive-to-channel receiver-fn)]
+(defn- mock-receiver-fn [] [:foo])
 
-    (is (instance? clojure.core.async.impl.channels.ManyToManyChannel receiver-chan))
-    (is (= :foo (<!! receiver-chan)))))
+(deftest receive-to-channel-test
+  (bond/with-spy [mock-receiver-fn]
+    (let [receiver-chan (receive/receive-to-channel mock-receiver-fn)]
+      (is (instance? clojure.core.async.impl.channels.ManyToManyChannel receiver-chan))
+
+      (is (= 1 (-> mock-receiver-fn  bond/calls count)))
+
+      (is (= :foo (<!! receiver-chan)))
+      (is (not (async-protocols/closed? receiver-chan)))
+
+      (is (= 2 (-> mock-receiver-fn  bond/calls count))))))
 
