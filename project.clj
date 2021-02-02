@@ -16,6 +16,10 @@
   :repl-options {:init-ns user
                  :timeout 120000}
 
+  :plugins [[lein-environ "1.2.0"]
+            [day8/lein-git-inject "0.0.14"]]
+  :middleware [leiningen.git-inject/middleware]
+
   :profiles {:dev {:source-paths ["src" "dev/src"]
                    ;; "test" is included by default - adding it here confuses
                    ;; circleci.test which runs everything twice.
@@ -26,10 +30,6 @@
                                   [circleci/bond "0.4.0"]
                                   [circleci/circleci.test "0.5.0"]
                                   [environ "1.2.0"]]
-
-                   :plugins [[lein-environ "1.2.0"]
-                             [day8/lein-git-inject "0.0.14"]]
-                   :middleware [leiningen.git-inject/middleware]
 
                    :env {:access-key             "default"
                          :secret-key             "default"
