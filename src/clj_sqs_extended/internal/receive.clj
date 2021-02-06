@@ -145,12 +145,13 @@
 
 (defn handle-unexpected-message
   [queue-url
-   loop-stats
    out-chan
-   ^clojure.lang.Atom receive-loop-running?
-   ^clojure.lang.Atom pause-and-restart-for-error?
-   receive-opts
-   message]
+   restart-opts
+   {loop-stats                                     :loop-stats
+    ^clojure.lang.Atom receive-loop-running?        :receive-loop-running?
+    ^clojure.lang.Atom pause-and-restart-for-error? :pause-and-restart-for-error?
+
+    message :message}]
   (cond
     (nil? message)                (stop-receive-loop! queue-url out-chan receive-loop-running?)
     ;; TODO refactor out stop-receive-loop! call from handle-message-exception-and-maybe-pause-this-loop
@@ -160,7 +161,7 @@
                                     out-chan
                                     receive-loop-running?
                                     pause-and-restart-for-error?
-                                    receive-opts
+                                    restart-opts
                                     message)
     :else message))
 
@@ -197,53 +198,36 @@
     ch))
 
 (defn receive-loop
-  ([sqs-ext-client queue-url out-chan]
-   (receive-loop sqs-ext-client queue-url out-chan {} {}))
+  [queue-url
+   out-chan
+   message-receiver-fn
+   process-received-message-fn]
+  (let [receive-loop-running? (atom true)
 
-  ([sqs-ext-client
-    queue-url
-    out-chan
-    {:keys [auto-delete
-            restart-delay-seconds
-            restart-limit]
-     :as   receive-opts}
-    sqs-opts]
-   (let [receive-loop-running? (atom true)
+        create-new-receiving-chan-fn
+        #(receive-to-channel message-receiver-fn)]
 
-         create-new-receiving-chan-fn
-         #(receive-to-channel
-            (partial sqs/receive-messages sqs-ext-client queue-url sqs-opts))]
+    (go-loop
+      [loop-stats        (init-receive-loop-stats)
+       receiving-chan    (create-new-receiving-chan-fn)
+       pause-and-restart-for-error? (atom false)]
 
-     (go-loop
-       [loop-stats        (init-receive-loop-stats)
-        receiving-chan    (create-new-receiving-chan-fn)
-        pause-and-restart-for-error? (atom false)]
+      (some->> (<! receiving-chan)
+               (assoc {:loop-stats                   loop-stats
+                       :receive-loop-running?        receive-loop-running?
+                       :pause-and-restart-for-error? pause-and-restart-for-error?}
+                      :message)
+               (process-received-message-fn))
 
-       (some->> (<! receiving-chan)
-                (handle-unexpected-message
-                  queue-url
-                  loop-stats
-                  out-chan
-                  receive-loop-running?
-                  pause-and-restart-for-error?
-                  receive-opts)
-                (assoc-done-fn-to-message sqs-ext-client queue-url)
-                (put-legit-message-to-out-chan
-                  {:sqs-ext-client sqs-ext-client
-                   :queue-url      queue-url
-                   :out-chan       out-chan
-                   :auto-delete?   auto-delete})
-                (delete-message-if-auto-delete auto-delete))
+      (if @receive-loop-running?
+        (recur (update-receive-loop-stats loop-stats @pause-and-restart-for-error?)
+               (next-receiving-chan
+                 receiving-chan
+                 create-new-receiving-chan-fn
+                 @pause-and-restart-for-error?)
+               (atom false))
+        (exit-receive-loop! queue-url loop-stats receiving-chan)))
 
-       (if @receive-loop-running?
-         (recur (update-receive-loop-stats loop-stats @pause-and-restart-for-error?)
-                (next-receiving-chan
-                  receiving-chan
-                  create-new-receiving-chan-fn
-                  @pause-and-restart-for-error?)
-                (atom false))
-         (exit-receive-loop! queue-url loop-stats receiving-chan)))
-
-     ;; returns a stop-fn
-     (partial stop-receive-loop! queue-url out-chan receive-loop-running?))))
+    ;; returns a stop-fn
+    (partial stop-receive-loop! queue-url out-chan receive-loop-running?)))
 
