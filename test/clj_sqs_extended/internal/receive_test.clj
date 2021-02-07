@@ -17,9 +17,15 @@
         out-chan (chan)
 
         stop-fn (receive/receive-loop
-                  @fixtures/test-sqs-ext-client
                   @fixtures/test-queue-url
-                  out-chan)]
+                  out-chan
+                  (partial sqs/receive-messages
+                           @fixtures/test-sqs-ext-client
+                           @fixtures/test-queue-url)
+                  (partial sqs/delete-message!
+                           @fixtures/test-sqs-ext-client
+                           @fixtures/test-queue-url)
+                  {:auto-delete? true})]
     (is (fn? stop-fn))
 
     (is (string? (sqs/send-message @fixtures/test-sqs-ext-client
@@ -45,11 +51,15 @@
         stop-receive-loops
         (doall (for [_ (range n)]
                  (receive/receive-loop
-                   @fixtures/test-sqs-ext-client
                    @fixtures/test-queue-url
                    c
-                   {:auto-delete true}
-                   {})))]
+                   (partial sqs/receive-messages
+                            @fixtures/test-sqs-ext-client
+                            @fixtures/test-queue-url)
+                   (partial sqs/delete-message!
+                            @fixtures/test-sqs-ext-client
+                            @fixtures/test-queue-url)
+                   {:auto-delete? true})))]
 
     (is (= n (count stop-receive-loops)))
     (is (every? fn? stop-receive-loops))
@@ -77,12 +87,17 @@
         ;; setup
         stop-receive-loop
         (receive/receive-loop
-          @fixtures/test-sqs-ext-client
           @fixtures/test-queue-url
           c
-          {:auto-delete false}
-          {:max-number-of-receiving-messages 1
-           :wait-time-in-seconds             1})]
+          (partial sqs/receive-messages
+                   @fixtures/test-sqs-ext-client
+                   @fixtures/test-queue-url
+                   {:max-number-of-receiving-messages 1
+                    :wait-time-in-seconds             1})
+          (partial sqs/delete-message!
+                   @fixtures/test-sqs-ext-client
+                   @fixtures/test-queue-url)
+          {:auto-delete? false})]
 
     (is (fn? stop-receive-loop))
     (is (= {"ApproximateNumberOfMessages" 0, "ApproximateNumberOfMessagesNotVisible" 0}
