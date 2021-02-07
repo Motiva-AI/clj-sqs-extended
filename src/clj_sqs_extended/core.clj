@@ -77,13 +77,13 @@
    handler-fn]
   (let [handler-chan (chan)
         stop-fn (receive/receive-loop
-                  sqs-ext-client
                   queue-url
                   handler-chan
-                  {:auto-delete           auto-delete
-                   :restart-limit         restart-limit
-                   :restart-delay-seconds restart-delay-seconds}
-                  {})]
+                  (partial sqs/receive-messages sqs-ext-client queue-url)
+                  (partial sqs/delete-message! sqs-ext-client queue-url)
+                  {:auto-delete? auto-delete
+                   :restart-opts {:restart-limit         restart-limit
+                                  :restart-delay-seconds restart-delay-seconds}})]
     (log/infof (str "Handling queue '%s' with: "
                     "number-of-handler-threads [%d], "
                     "restart-limit [%d], "
