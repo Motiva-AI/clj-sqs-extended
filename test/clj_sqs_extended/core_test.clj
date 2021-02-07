@@ -405,7 +405,7 @@
            ;; trying to delete message here should throw error since message should have been deleted already
            (is (thrown-with-msg?
                  AmazonSQSException
-                 #"Service: AmazonSQS; Status Code: 400;"
+                 #"Status Code: 400;"
                  (sqs/delete-message! @fixtures/test-sqs-ext-client
                                       @fixtures/test-queue-url
                                       @message-preview)))
