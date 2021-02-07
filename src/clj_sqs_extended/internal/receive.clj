@@ -80,9 +80,7 @@
          #(async-delete-message! sqs-ext-client queue-url message)))
 
 (defn put-legit-message-to-out-chan
-  [{queue-url      :queue-url
-    out-chan       :out-chan}
-   message]
+  [queue-url out-chan message]
   (if (:body message)
     (when-not (>!! out-chan message)
       ;; TODO refactor this fn's logic so that we don't need to throw an exception to stop auto-delete
@@ -228,11 +226,7 @@
                   pause-and-restart-for-error?
                   receive-opts)
                 (assoc-done-fn-to-message sqs-ext-client queue-url)
-                (put-legit-message-to-out-chan
-                  {:sqs-ext-client sqs-ext-client
-                   :queue-url      queue-url
-                   :out-chan       out-chan
-                   :auto-delete?   auto-delete})
+                (put-legit-message-to-out-chan queue-url out-chan)
                 (delete-message-if-auto-delete auto-delete))
 
        (if @receive-loop-running?
