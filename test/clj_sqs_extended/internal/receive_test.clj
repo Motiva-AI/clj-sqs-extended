@@ -12,14 +12,40 @@
 (use-fixtures :once fixtures/with-test-sqs-ext-client fixtures/with-test-s3-bucket)
 (use-fixtures :each fixtures/with-transient-queue)
 
+;; TODO these test fns are very ugly...
+(defn test-receiver-fn []
+  (sqs/receive-messages
+    @fixtures/test-sqs-ext-client
+    @fixtures/test-queue-url))
+
+(defn- test-processor-fn
+  ([out-chan message]
+   (test-processor-fn out-chan true message))
+
+  ([out-chan auto-delete? message]
+  (->> message
+       (receive/handle-unexpected-message
+         @fixtures/test-queue-url
+         out-chan
+         {})
+       (receive/assoc-done-fn-to-message
+         @fixtures/test-sqs-ext-client @fixtures/test-queue-url)
+       (receive/put-legit-message-to-out-chan
+         {:sqs-ext-client @fixtures/test-queue-url
+          :queue-url      @fixtures/test-queue-url
+          :out-chan       out-chan
+          :auto-delete?   auto-delete?})
+       (receive/delete-message-if-auto-delete auto-delete?))))
+
 (deftest nil-returned-after-loop-was-terminated
   (let [message  (helpers/random-message-basic)
         out-chan (chan)
 
         stop-fn (receive/receive-loop
-                  @fixtures/test-sqs-ext-client
                   @fixtures/test-queue-url
-                  out-chan)]
+                  out-chan
+                  test-receiver-fn
+                  (partial test-processor-fn out-chan))]
     (is (fn? stop-fn))
 
     (is (string? (sqs/send-message @fixtures/test-sqs-ext-client
@@ -45,11 +71,10 @@
         stop-receive-loops
         (doall (for [_ (range n)]
                  (receive/receive-loop
-                   @fixtures/test-sqs-ext-client
                    @fixtures/test-queue-url
                    c
-                   {:auto-delete true}
-                   {})))]
+                   test-receiver-fn
+                   (partial test-processor-fn c))))]
 
     (is (= n (count stop-receive-loops)))
     (is (every? fn? stop-receive-loops))
@@ -77,12 +102,14 @@
         ;; setup
         stop-receive-loop
         (receive/receive-loop
-          @fixtures/test-sqs-ext-client
           @fixtures/test-queue-url
           c
-          {:auto-delete false}
-          {:max-number-of-receiving-messages 1
-           :wait-time-in-seconds             1})]
+          (sqs/receive-messages
+            @fixtures/test-sqs-ext-client
+            @fixtures/test-queue-url
+            {:max-number-of-receiving-messages 1
+             :wait-time-in-seconds             1})
+          (partial test-processor-fn c false))]
 
     (is (fn? stop-receive-loop))
     (is (= {"ApproximateNumberOfMessages" 0, "ApproximateNumberOfMessagesNotVisible" 0}
