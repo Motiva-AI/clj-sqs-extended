@@ -390,25 +390,33 @@
 
        (is (sqs-ext/send-message @fixtures/test-sqs-ext-client @fixtures/test-queue-url msg))
 
-       (bond/with-spy [receive/delete-message-if-auto-delete]
+       (bond/with-spy [receive/delete-message-if-auto-delete
+                       sqs/delete-message!]
          (let [stop-fn (sqs-ext/handle-queue
                          @fixtures/test-sqs-ext-client
-                         {:queue-url @fixtures/test-queue-url
+                         {:queue-url                 @fixtures/test-queue-url
                           :number-of-handler-threads 1
-                          :auto-delete true}
+                          :auto-delete               true}
                          handler-fn)]
            (is (fn? (:done-fn @message-preview)))
            (is (= 1
                   (-> receive/delete-message-if-auto-delete
                       (bond/calls)
                       (count))))
+           (Thread/sleep 100) ;; wait for delete-message! to run
+           (is (= 1
+                  (-> sqs/delete-message!
+                      (bond/calls)
+                      (count))))
+
            ;; trying to delete message here should throw error since message should have been deleted already
            (is (thrown-with-msg?
                  AmazonSQSException
-                 #"Service: AmazonSQS; Status Code: 400;"
+                 #"Status Code: 400"
                  (sqs/delete-message! @fixtures/test-sqs-ext-client
                                       @fixtures/test-queue-url
                                       @message-preview)))
+
            ;; ensure that he message hasn't been processed by handler-fn at this point
            (is (false? @message-processed?))
 
