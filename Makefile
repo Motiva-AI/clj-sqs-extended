@@ -4,5 +4,5 @@ test:
 	circleci local execute --job build
 
 devel:
-	docker-compose up
+	docker-compose up localstack
 
