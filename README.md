@@ -13,81 +13,55 @@ $ make devel
 ```
 
 ```clj
-(require '[clojure.tools.logging :as log]
-         '[clj-sqs-extended.aws.s3 :as s3]
-         '[clj-sqs-extended.core :as sqs-ext])
+(require '[clj-sqs-extended.core :as sqs-ext]
+         '[clj-sqs-extended.aws.sqs :as sqs])
 
-(import '[java.util.concurrent CountDownLatch])
+(def config
+  {:access-key     "default"
+   :secret-key     "default"
+   :s3-endpoint    "http://localhost:4566"
+   :s3-bucket-name "example-bucket"
+   :sqs-endpoint   "http://localhost:4566"
+   :region         "us-east-2"})
+(def client (sqs-ext/sqs-ext-client config))
+(def queue-url (sqs/create-standard-queue! client "my-test-queue"))
+; "http://localstack:4566/000000000000/my-test-queue"
 
+(sqs-ext/send-message client queue-url "hello world!")
+; "61b077d1-63f9-cd52-b2eb-1078d66ed1a4"
 
-(def sqs-ext-config
- {:access-key     "default"
-  :secret-key     "default"
-  :s3-endpoint    "http://localhost:4566"
-  :s3-bucket-name "example-bucket"
-  :sqs-endpoint   "http://localhost:4566"
-  :region         "us-east-2"})
+(sqs/receive-messages client queue-url)
+; ({:body "hello world!"
+;   :format :transit
+;   :messageId "61b077d1-63f9-cd52-b2eb-1078d66ed1a4"
+;   :receiptHandle "myztiahpogtvdzmjnjqdgezxppupfabbwqckgymjsqyxsclfbajceqrmeuheuqcyuupppmqtryibpkuuoedhrqicnqtkcrsajycnlorutgtgzwykwoqkbkocrpmwedcnafhqetnejdfkwwkcmkrohkldahtzpiavhvyohpccrgssklvoyosricawi"})
 
-(def s3-client (s3/s3-client sqs-ext-config))
+;; remove the message from the queue
+(->> (sqs/receive-messages client queue-url)
+     (first)
+     (sqs/delete-message! client queue-url))
 
-(s3/create-bucket! s3-client (:s3-bucket-name sqs-ext-config))
+;; what about sending a message beyond the SQS size limit of 256kb?
 
-(def example-queue-url
-  (sqs-ext/create-standard-queue! sqs-ext-config "example-queue"))
+(require 'clj-sqs-extended.test-helpers)
+(def a-large-message (clj-sqs-extended.test-helpers/random-message-larger-than-256kb))
 
-(defn random-string-with-length
-  [length]
-  (->> (repeatedly #(char (+ 32 (rand 94))))
-       (take length)
-       (apply str)))
+(sqs-ext/send-message client queue-url a-large-message)
+; com.amazonaws.services.s3.model.AmazonS3Exception
 
-(defn random-message-larger-than-256kb
-  []
-  {:id      (rand-int 65535)
-   :payload (random-string-with-length 300000)})
+(require '[clj-sqs-extended.aws.s3 :as s3])
 
-(defn dispatch-action-service
-  ([message]
-   (log/infof "I got '%s'..."
-              (subs (:payload message) 0 32)))
-  ([message done-fn]
-   (log/infof "I got '%s'..."
-              (subs (:payload message) 0 32))
-   (done-fn)))
+(s3/create-bucket! (s3/s3-client config) (:s3-bucket-name config))
+; "example-bucket"
 
-(defn start-action-service-queue-listener
-  []
-  (sqs-ext/handle-queue sqs-ext-config
-                        {:queue-url                 example-queue-url
-                         :number-of-handler-threads 1}
-                        dispatch-action-service))
+(sqs-ext/send-message client queue-url a-large-message)
+; 8a0c6d21-f98f-5464-0c8d-91da53ed04a8
 
-(defn start-queue-listeners
-  []
-  (let [stop-fns [(start-action-service-queue-listener)]]
-    (fn []
-      (doseq [f stop-fns]
-        (f)))))
+; (sqs/receive-messages client queue-url)
+; this will print a-large-message and flood your screen...
 
-(defn start-worker
-  []
-  (let [sigterm (CountDownLatch. 1)]
-    (log/info "Starting queue workers ...")
-    (let [stop-listeners (start-queue-listeners)]
-      (.await sigterm)
-      (stop-listeners))))
-
-(defn run-example
-  []
-  ;; Start processing all received messages ...
-  (future (start-worker))
-
-  ;; Send a large test message that requires S3 usage to store its payload ...
-  (log/infof "Sent message with ID '%s'."
-             (sqs-ext/send-message sqs-ext-config
-                                   example-queue-url
-                                   (random-message-larger-than-256kb))))
 ```
+
 
 ## Development
 

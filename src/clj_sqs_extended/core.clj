@@ -5,6 +5,13 @@
             [clj-sqs-extended.internal.receive :as receive]
             [clj-sqs-extended.aws.sqs :as sqs]))
 
+(def config
+  {:access-key     "default"
+   :secret-key     "default"
+   :s3-endpoint    "http://localhost:4566"
+   :s3-bucket-name "example-bucket"
+   :sqs-endpoint   "http://localhost:4566"
+   :region         "us-east-2"})
 
 ;; Conveniance declarations
 (def sqs-ext-client    sqs/sqs-ext-client)
