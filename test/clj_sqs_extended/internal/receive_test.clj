@@ -12,33 +12,27 @@
 (use-fixtures :once fixtures/with-test-sqs-ext-client fixtures/with-test-s3-bucket)
 (use-fixtures :each fixtures/with-transient-queue)
 
+(def mock-received-messages [{:receiptHandle "receipt"
+                              :body          "foo"}])
+
 (deftest nil-returned-after-loop-was-terminated
-  (let [message  (helpers/random-message-basic)
+  (let [message  mock-received-messages
         out-chan (chan)
 
         stop-fn (receive/receive-loop
                   @fixtures/test-queue-url
                   out-chan
-                  (partial sqs/receive-messages
-                           @fixtures/test-sqs-ext-client
-                           @fixtures/test-queue-url)
-                  (partial sqs/delete-message!
-                           @fixtures/test-sqs-ext-client
-                           @fixtures/test-queue-url)
-                  {:auto-delete? true})]
+                  (constantly message)
+                  identity
+                  {})]
     (is (fn? stop-fn))
-
-    (is (string? (sqs/send-message @fixtures/test-sqs-ext-client
-                                   @fixtures/test-queue-url
-                                   message)))
-    (is (= message (:body (<!! out-chan))))
+    (is (= (:body (first message))
+           (:body (<!! out-chan))))
 
     ;; terminate receive loop and thereby close the out-channel
     (stop-fn)
+    (<!! out-chan) ;; take out the last buffered item
 
-    (is (string? (sqs/send-message @fixtures/test-sqs-ext-client
-                                   @fixtures/test-queue-url
-                                   message)))
     (is (clojure.core.async.impl.protocols/closed? out-chan))
     (is (nil? (<!! out-chan)))))
 
