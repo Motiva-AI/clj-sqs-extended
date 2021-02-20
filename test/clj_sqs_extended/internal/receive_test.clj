@@ -37,7 +37,7 @@
     (is (nil? (<!! out-chan)))))
 
 (deftest numerous-simultaneous-receive-loops
-  (let [message (helpers/random-message-basic)
+  (let [message mock-received-messages
         n       10
         c       (chan)
 
@@ -47,31 +47,23 @@
                  (receive/receive-loop
                    @fixtures/test-queue-url
                    c
-                   (partial sqs/receive-messages
-                            @fixtures/test-sqs-ext-client
-                            @fixtures/test-queue-url)
-                   (partial sqs/delete-message!
-                            @fixtures/test-sqs-ext-client
-                            @fixtures/test-queue-url)
-                   {:auto-delete? true})))]
+                   (constantly message)
+                   identity
+                   {})))]
 
     (is (= n (count stop-receive-loops)))
     (is (every? fn? stop-receive-loops))
 
-    (is (sqs/send-message @fixtures/test-sqs-ext-client
-                          @fixtures/test-queue-url
-                          message))
-
-    (let [[out _] (alts!! [c (timeout 1000)])]
-      (is (= message (:body out))))
+    (is (= (:body (first message))
+           (:body (<!! c))))
 
     ;; teardown
     (doseq [stop-fn stop-receive-loops]
       (stop-fn))
-    (close! c)
+    (close! c))
 
-    ;; gives time for the receive-loop to stop
-    (Thread/sleep 500)))
+  ;; gives time for the receive-loop to stop. otherwise, subsequent tests might fail
+  (Thread/sleep 300))
 
 (deftest only-acknowledge-messages-that-handler-is-available-to-process
   (let [n        5
