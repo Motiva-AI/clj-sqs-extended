@@ -45,9 +45,12 @@
       (is (= :foo (<!! receiver-chan)))
       (is (not (async-protocols/closed? receiver-chan)))
 
-      (is (= 2 (-> mock-receiver-fn  bond/calls count))))))
+      ;; this count count be 1 or 2 because it depends on responsiveness of the inner loop
+      (is (<= 1
+              (-> mock-receiver-fn  bond/calls count)
+              2)))))
 
-(deftest ^:flaky numerous-simultaneous-receive-loops
+(deftest numerous-simultaneous-receive-loops
   (let [message mock-received-messages
         n       10
         c       (chan)
@@ -71,8 +74,5 @@
     ;; teardown
     (doseq [stop-fn stop-receive-loops]
       (stop-fn))
-    (close! c))
-
-  ;; gives time for the receive-loop to stop. otherwise, subsequent tests might fail
-  (Thread/sleep 500))
+    (close! c)))
 
