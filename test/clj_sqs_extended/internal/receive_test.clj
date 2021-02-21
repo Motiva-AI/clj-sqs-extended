@@ -33,7 +33,21 @@
     (is (clojure.core.async.impl.protocols/closed? out-chan))
     (is (nil? (<!! out-chan)))))
 
-(deftest numerous-simultaneous-receive-loops
+(defn- mock-receiver-fn [] [:foo])
+
+(deftest receive-to-channel-test
+  (bond/with-spy [mock-receiver-fn]
+    (let [receiver-chan (receive/receive-to-channel mock-receiver-fn)]
+      (is (instance? clojure.core.async.impl.channels.ManyToManyChannel receiver-chan))
+
+      (is (= 1 (-> mock-receiver-fn  bond/calls count)))
+
+      (is (= :foo (<!! receiver-chan)))
+      (is (not (async-protocols/closed? receiver-chan)))
+
+      (is (= 2 (-> mock-receiver-fn  bond/calls count))))))
+
+(deftest ^:flaky numerous-simultaneous-receive-loops
   (let [message mock-received-messages
         n       10
         c       (chan)
@@ -60,19 +74,5 @@
     (close! c))
 
   ;; gives time for the receive-loop to stop. otherwise, subsequent tests might fail
-  (Thread/sleep 300))
-
-(defn- mock-receiver-fn [] [:foo])
-
-(deftest receive-to-channel-test
-  (bond/with-spy [mock-receiver-fn]
-    (let [receiver-chan (receive/receive-to-channel mock-receiver-fn)]
-      (is (instance? clojure.core.async.impl.channels.ManyToManyChannel receiver-chan))
-
-      (is (= 1 (-> mock-receiver-fn  bond/calls count)))
-
-      (is (= :foo (<!! receiver-chan)))
-      (is (not (async-protocols/closed? receiver-chan)))
-
-      (is (= 2 (-> mock-receiver-fn  bond/calls count))))))
+  (Thread/sleep 500))
 
