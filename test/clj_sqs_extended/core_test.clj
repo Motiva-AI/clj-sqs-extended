@@ -1,16 +1,16 @@
 (ns clj-sqs-extended.core-test
   (:require [clojure.test :refer [use-fixtures deftest testing is]]
-            [clojure.core.async :refer [chan close! <!! >!! timeout alt!! alts!! thread]]
             [bond.james :as bond]
+
+            [clojure.core.async :refer [chan close! <!! >!! timeout alt!! alts!! thread]]
+            [clojure.core.async.impl.protocols]
+
             [clj-sqs-extended.aws.sqs :as sqs]
             [clj-sqs-extended.core :as sqs-ext]
             [clj-sqs-extended.internal.receive :as receive]
             [clj-sqs-extended.test-fixtures :as fixtures]
             [clj-sqs-extended.test-helpers :as helpers])
-  (:import [com.amazonaws
-            AmazonServiceException
-            SdkClientException]
-           [com.amazonaws.services.sqs.model AmazonSQSException]
+  (:import [com.amazonaws.services.sqs.model AmazonSQSException]
            [java.net.http HttpTimeoutException]))
 
 ;; fixtures ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -61,36 +61,6 @@
 (defonce test-message-large (helpers/random-message-larger-than-256kb))
 
 ;; tests ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(deftest send-nil-body-message-yields-exception
-  (testing "Sending a standard message with a nil body yields exception"
-    (is (thrown? Exception
-                 (sqs-ext/send-message @fixtures/test-sqs-ext-client
-                                       @fixtures/test-queue-url
-                                       nil))))
-
-  (testing "Sending a FIFO message with a nil body yields exception"
-    (is (thrown? Exception
-                 (sqs-ext/send-fifo-message @fixtures/test-sqs-ext-client
-                                            @fixtures/test-queue-url
-                                            nil
-                                            (helpers/random-group-id))))))
-
-(deftest send-message-to-non-existing-queue-fails
-  (testing "Sending a standard message to a non-existing queue yields proper exception"
-    (is (thrown-with-msg? SdkClientException
-                          #"^.*Unable to execute HTTP request: non-existing-queue.*$"
-                          (sqs-ext/send-message @fixtures/test-sqs-ext-client
-                                                "https://non-existing-queue"
-                                                (first test-messages-basic)))))
-
-  (testing "Sending a FIFO message to a non-existing queue yields proper exception"
-    (is (thrown-with-msg? SdkClientException
-                          #"^.*Unable to execute HTTP request: non-existing-queue.*$"
-                          (sqs-ext/send-fifo-message @fixtures/test-sqs-ext-client
-                                                     "https://non-existing-queue"
-                                                     (first test-messages-basic)
-                                                     (helpers/random-group-id))))))
 
 (defn timed-take!!
   ([c] (timed-take!! c 3000))
@@ -480,24 +450,4 @@
 
     ;; gives time for the receive-loop to stop
     (Thread/sleep 500)))
-
-(deftest unreachable-endpoint-yields-proper-exception
-  (let [unreachable-sqs-ext-client (sqs-ext/sqs-ext-client
-                                     (merge fixtures/sqs-ext-config
-                                            {:sqs-endpoint "https://unreachable-endpoint"
-                                             :s3-endpoint  "https://unreachable-endpoint"}))]
-    (is (thrown? SdkClientException
-                 (sqs-ext/send-message unreachable-sqs-ext-client
-                                       "unreachable-queue"
-                                       {:data "here-be-dragons"})))))
-
-(deftest cannot-send-large-message-to-non-existing-s3-bucket
-  (let [non-existing-bucket-sqs-ext-client (sqs-ext/sqs-ext-client
-                                             (assoc fixtures/sqs-ext-config
-                                                    :s3-bucket-name
-                                                    "non-existing-bucket"))]
-    (is (thrown? AmazonServiceException
-                 (sqs-ext/send-message non-existing-bucket-sqs-ext-client
-                                       @fixtures/test-queue-url
-                                       (helpers/random-message-larger-than-256kb))))))
 
