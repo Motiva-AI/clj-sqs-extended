@@ -4,6 +4,6 @@
  :reporters        [circleci.test.report/clojure-test-reporter
                     junit/reporter]
 
- :selectors {:default     (complement :integration)
-             :integration :integration
+ :selectors {:acceptance  (fn [m] (or (:integration m) (:functional m)))
+             :default     (complement :acceptance)
              :all         (constantly true)}}

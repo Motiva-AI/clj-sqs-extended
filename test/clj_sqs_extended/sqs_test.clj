@@ -23,7 +23,7 @@
                                          @fixtures/test-queue-url)]
       (is (empty? response)))))
 
-(deftest can-receive-message
+(deftest ^:integration can-receive-message
   (testing "Sending/Receiving basic maps"
     (let [test-message (first test-messages)]
       (doseq [format [:transit :json]]
@@ -36,7 +36,7 @@
                                              @fixtures/test-queue-url)]
           (is (= [test-message] (map :body response))))))))
 
-(deftest safely-receive-nil-message
+(deftest ^:integration safely-receive-nil-message
   ;; sqs/wait-and-receive-messages-from-sqs returns an empty list when
   ;; WaitTimeSeconds is reached
   ;;
@@ -48,7 +48,7 @@
     (is (empty? (sqs/receive-messages @fixtures/test-sqs-ext-client
                                       @fixtures/test-queue-url)))))
 
-(deftest can-receive-fifo-message
+(deftest ^:integration can-receive-fifo-message
   (doseq [format [:transit :json]]
     (let [test-message (first test-messages)]
       (sqs/send-fifo-message @fixtures/test-sqs-ext-client
@@ -61,7 +61,7 @@
                                            @fixtures/test-queue-url)]
         (is (= [test-message] (map :body response)))))))
 
-(deftest can-send-message-larger-than-256kb
+(deftest ^:integration can-send-message-larger-than-256kb
   (testing "Sending a message with more than 256kb of data (via S3 bucket) in raw format"
     (sqs/send-message @fixtures/test-sqs-ext-client
                       @fixtures/test-queue-url
@@ -70,7 +70,7 @@
                                          @fixtures/test-queue-url)]
       (is (= [test-message-larger-than-256kb] (map :body response))))))
 
-(deftest create-queue-request-attributes-attached-correctly
+(deftest ^:functional create-queue-request-attributes-attached-correctly
   (testing "Creating a queue create request with single attributes works as expected"
     (let [test-request (sqs/build-create-queue-request-with-attributes
                           "test-queue-name"
@@ -87,7 +87,7 @@
             {"KmsMasterKeyId"               "UnbreakableMasterKey"
              "KmsDataKeyReusePeriodSeconds" "60"})))))
 
-(deftest message-without-format-attribute-is-received-correctly
+(deftest ^:functional message-without-format-attribute-is-received-correctly
   (testing "A message without the format attribute gets read without error"
     (let [plain-message (helpers/random-string-with-length 32)]
       (.sendMessage @fixtures/test-sqs-ext-client
@@ -99,7 +99,7 @@
 
 ;; Send failure cases
 
-(deftest send-nil-body-message-yields-exception
+(deftest ^:functional send-nil-body-message-yields-exception
   (testing "Sending a standard message with a nil body yields exception"
     (is (thrown? Exception
                  (sqs/send-message @fixtures/test-sqs-ext-client
@@ -113,7 +113,7 @@
                                         nil
                                         (helpers/random-group-id))))))
 
-(deftest send-message-to-non-existing-queue-fails
+(deftest ^:functional send-message-to-non-existing-queue-fails
   (testing "Sending a standard message to a non-existing queue yields proper exception"
     (is (thrown-with-msg? SdkClientException
                           #"^.*Unable to execute HTTP request: non-existing-queue.*$"
@@ -129,7 +129,7 @@
                                                      (first test-messages)
                                                      (helpers/random-group-id))))))
 
-(deftest unreachable-endpoint-yields-proper-exception
+(deftest ^:functional unreachable-endpoint-yields-proper-exception
   (let [unreachable-sqs-ext-client (sqs/sqs-ext-client
                                      (merge fixtures/sqs-ext-config
                                             {:sqs-endpoint "https://unreachable-endpoint"
@@ -139,7 +139,7 @@
                                        "unreachable-queue"
                                        {:data "here-be-dragons"})))))
 
-(deftest cannot-send-large-message-to-non-existing-s3-bucket
+(deftest ^:functional cannot-send-large-message-to-non-existing-s3-bucket
   (let [non-existing-bucket-sqs-ext-client (sqs/sqs-ext-client
                                              (assoc fixtures/sqs-ext-config
                                                     :s3-bucket-name

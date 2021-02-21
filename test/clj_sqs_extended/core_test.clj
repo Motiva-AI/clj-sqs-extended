@@ -69,7 +69,7 @@
    (-> (alts!! [c (timeout timeout-in-ms)])
        (first))))
 
-(deftest handle-queue-sends-and-receives-basic-messages
+(deftest ^:functional handle-queue-sends-and-receives-basic-messages
   (let [handler-chan (chan)]
     (with-handle-queue-defaults
       handler-chan
@@ -95,7 +95,7 @@
                    (= test-message-large (timed-take!! handler-chan))))))
     (close! handler-chan)))
 
-(deftest handle-queue-sends-and-receives-messages-without-bucket
+(deftest ^:functional handle-queue-sends-and-receives-messages-without-bucket
   (let [handler-chan (chan)
         sqs-ext-client-without-bucket (sqs/sqs-ext-client
                                         (dissoc fixtures/sqs-ext-config
@@ -114,7 +114,7 @@
       (is (= test-message-with-time (timed-take!! handler-chan))))
     (close! handler-chan)))
 
-(deftest handle-queue-sends-and-receives-timestamped-message
+(deftest ^:functional handle-queue-sends-and-receives-timestamped-message
   (let [handler-chan (chan)]
     (with-handle-queue-defaults
       handler-chan
@@ -125,7 +125,7 @@
       (is (= test-message-with-time (timed-take!! handler-chan))))
     (close! handler-chan)))
 
-(deftest handle-queue-sends-and-receives-fifo-messages
+(deftest ^:functional handle-queue-sends-and-receives-fifo-messages
   (let [handler-chan (chan)
         message (first test-messages-basic)]
     (with-handle-queue-defaults
@@ -139,7 +139,7 @@
       (is (= message (<!! handler-chan))))))
 
 ;; we unexpectedly get a round-trip message working when it's supposed to fail
-#_(deftest handle-queue-terminates-with-non-existing-bucket
+#_(deftest ^:functional handle-queue-terminates-with-non-existing-bucket
   (let [handler-chan (chan)]
     (bond/with-spy [receive/stop-receive-loop!]
       (with-handle-queue
@@ -158,7 +158,7 @@
 
     (close! handler-chan)))
 
-(deftest handle-queue-terminates-after-restart-count-exceeded
+(deftest ^:functional handle-queue-terminates-after-restart-count-exceeded
   (let [handler-chan          (chan)
         restart-limit         2
         restart-delay-seconds 1]
@@ -190,7 +190,7 @@
 
     (close! handler-chan)))
 
-(deftest handle-queue-restarts-if-error-occurs
+(deftest ^:functional handle-queue-restarts-if-error-occurs
   (let [handler-chan (chan)
         wait-and-receive-messages-from-sqs sqs/wait-and-receive-messages-from-sqs
         called-counter (atom 0)]
@@ -225,7 +225,7 @@
                     (timed-take!! handler-chan 1000)))))))
     (close! handler-chan)))
 
-(deftest manually-deleted-messages-dont-get-resent
+(deftest ^:functional manually-deleted-messages-dont-get-resent
   (bond/with-spy [test-handler-fn]
     (let [handler-chan (chan)]
       (with-handle-queue
@@ -255,7 +255,7 @@
 
       (close! handler-chan))))
 
-(deftest messages-get-resent-if-not-deleted-manually-and-auto-delete-is-false
+(deftest ^:functional messages-get-resent-if-not-deleted-manually-and-auto-delete-is-false
   (bond/with-spy [test-handler-fn]
     (let [handler-chan (chan)
           message      (last test-messages-basic)
@@ -302,7 +302,7 @@
               (println "Handler function threw an error!")))
           (recur))))))
 
-(deftest message-is-auto-deleted-when-auto-delete-is-true
+(deftest ^:functional message-is-auto-deleted-when-auto-delete-is-true
   (bond/with-spy [test-handler-fn]
     (let [handler-chan (chan)]
       (with-redefs-fn {#'sqs-ext/launch-handler-threads
@@ -341,7 +341,7 @@
 
       (close! handler-chan))))
 
-(deftest message-is-auto-deleted-before-handler-finishes-when-auto-delete-is-true
+(deftest ^:functional message-is-auto-deleted-before-handler-finishes-when-auto-delete-is-true
   (with-redefs-fn {#'sqs-ext/launch-handler-threads
                    launch-handler-threads-with-complete-sqs-message-forwarding}
     #(let [c                 (chan)
