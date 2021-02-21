@@ -1,16 +1,16 @@
 (ns clj-sqs-extended.core-test
   (:require [clojure.test :refer [use-fixtures deftest testing is]]
-            [clojure.core.async :refer [chan close! <!! >!! timeout alt!! alts!! thread]]
             [bond.james :as bond]
+
+            [clojure.core.async :refer [chan close! <!! >!! timeout alt!! alts!! thread]]
+            [clojure.core.async.impl.protocols]
+
             [clj-sqs-extended.aws.sqs :as sqs]
             [clj-sqs-extended.core :as sqs-ext]
             [clj-sqs-extended.internal.receive :as receive]
             [clj-sqs-extended.test-fixtures :as fixtures]
             [clj-sqs-extended.test-helpers :as helpers])
-  (:import [com.amazonaws
-            AmazonServiceException
-            SdkClientException]
-           [com.amazonaws.services.sqs.model AmazonSQSException]
+  (:import [com.amazonaws.services.sqs.model AmazonSQSException]
            [java.net.http HttpTimeoutException]))
 
 ;; fixtures ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -62,36 +62,6 @@
 
 ;; tests ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(deftest send-nil-body-message-yields-exception
-  (testing "Sending a standard message with a nil body yields exception"
-    (is (thrown? Exception
-                 (sqs-ext/send-message @fixtures/test-sqs-ext-client
-                                       @fixtures/test-queue-url
-                                       nil))))
-
-  (testing "Sending a FIFO message with a nil body yields exception"
-    (is (thrown? Exception
-                 (sqs-ext/send-fifo-message @fixtures/test-sqs-ext-client
-                                            @fixtures/test-queue-url
-                                            nil
-                                            (helpers/random-group-id))))))
-
-(deftest send-message-to-non-existing-queue-fails
-  (testing "Sending a standard message to a non-existing queue yields proper exception"
-    (is (thrown-with-msg? SdkClientException
-                          #"^.*Unable to execute HTTP request: non-existing-queue.*$"
-                          (sqs-ext/send-message @fixtures/test-sqs-ext-client
-                                                "https://non-existing-queue"
-                                                (first test-messages-basic)))))
-
-  (testing "Sending a FIFO message to a non-existing queue yields proper exception"
-    (is (thrown-with-msg? SdkClientException
-                          #"^.*Unable to execute HTTP request: non-existing-queue.*$"
-                          (sqs-ext/send-fifo-message @fixtures/test-sqs-ext-client
-                                                     "https://non-existing-queue"
-                                                     (first test-messages-basic)
-                                                     (helpers/random-group-id))))))
-
 (defn timed-take!!
   ([c] (timed-take!! c 3000))
 
@@ -99,7 +69,7 @@
    (-> (alts!! [c (timeout timeout-in-ms)])
        (first))))
 
-(deftest handle-queue-sends-and-receives-basic-messages
+(deftest ^:functional handle-queue-sends-and-receives-basic-messages
   (let [handler-chan (chan)]
     (with-handle-queue-defaults
       handler-chan
@@ -125,7 +95,7 @@
                    (= test-message-large (timed-take!! handler-chan))))))
     (close! handler-chan)))
 
-(deftest handle-queue-sends-and-receives-messages-without-bucket
+(deftest ^:functional handle-queue-sends-and-receives-messages-without-bucket
   (let [handler-chan (chan)
         sqs-ext-client-without-bucket (sqs/sqs-ext-client
                                         (dissoc fixtures/sqs-ext-config
@@ -144,7 +114,7 @@
       (is (= test-message-with-time (timed-take!! handler-chan))))
     (close! handler-chan)))
 
-(deftest handle-queue-sends-and-receives-timestamped-message
+(deftest ^:functional handle-queue-sends-and-receives-timestamped-message
   (let [handler-chan (chan)]
     (with-handle-queue-defaults
       handler-chan
@@ -155,7 +125,7 @@
       (is (= test-message-with-time (timed-take!! handler-chan))))
     (close! handler-chan)))
 
-(deftest handle-queue-sends-and-receives-fifo-messages
+(deftest ^:functional handle-queue-sends-and-receives-fifo-messages
   (let [handler-chan (chan)
         message (first test-messages-basic)]
     (with-handle-queue-defaults
@@ -169,7 +139,7 @@
       (is (= message (<!! handler-chan))))))
 
 ;; we unexpectedly get a round-trip message working when it's supposed to fail
-#_(deftest handle-queue-terminates-with-non-existing-bucket
+#_(deftest ^:functional handle-queue-terminates-with-non-existing-bucket
   (let [handler-chan (chan)]
     (bond/with-spy [receive/stop-receive-loop!]
       (with-handle-queue
@@ -188,7 +158,7 @@
 
     (close! handler-chan)))
 
-(deftest handle-queue-terminates-after-restart-count-exceeded
+(deftest ^:functional handle-queue-terminates-after-restart-count-exceeded
   (let [handler-chan          (chan)
         restart-limit         2
         restart-delay-seconds 1]
@@ -220,7 +190,7 @@
 
     (close! handler-chan)))
 
-(deftest handle-queue-restarts-if-error-occurs
+(deftest ^:functional handle-queue-restarts-if-error-occurs
   (let [handler-chan (chan)
         wait-and-receive-messages-from-sqs sqs/wait-and-receive-messages-from-sqs
         called-counter (atom 0)]
@@ -255,7 +225,7 @@
                     (timed-take!! handler-chan 1000)))))))
     (close! handler-chan)))
 
-(deftest manually-deleted-messages-dont-get-resent
+(deftest ^:functional manually-deleted-messages-dont-get-resent
   (bond/with-spy [test-handler-fn]
     (let [handler-chan (chan)]
       (with-handle-queue
@@ -285,7 +255,7 @@
 
       (close! handler-chan))))
 
-(deftest messages-get-resent-if-not-deleted-manually-and-auto-delete-is-false
+(deftest ^:functional messages-get-resent-if-not-deleted-manually-and-auto-delete-is-false
   (bond/with-spy [test-handler-fn]
     (let [handler-chan (chan)
           message      (last test-messages-basic)
@@ -332,7 +302,7 @@
               (println "Handler function threw an error!")))
           (recur))))))
 
-(deftest message-is-auto-deleted-when-auto-delete-is-true
+(deftest ^:functional message-is-auto-deleted-when-auto-delete-is-true
   (bond/with-spy [test-handler-fn]
     (let [handler-chan (chan)]
       (with-redefs-fn {#'sqs-ext/launch-handler-threads
@@ -371,7 +341,7 @@
 
       (close! handler-chan))))
 
-(deftest message-is-auto-deleted-before-handler-finishes-when-auto-delete-is-true
+(deftest ^:functional message-is-auto-deleted-before-handler-finishes-when-auto-delete-is-true
   (with-redefs-fn {#'sqs-ext/launch-handler-threads
                    launch-handler-threads-with-complete-sqs-message-forwarding}
     #(let [c                 (chan)
@@ -427,23 +397,57 @@
            ;; teardown
            (stop-fn))))))
 
-(deftest unreachable-endpoint-yields-proper-exception
-  (let [unreachable-sqs-ext-client (sqs-ext/sqs-ext-client
-                                     (merge fixtures/sqs-ext-config
-                                            {:sqs-endpoint "https://unreachable-endpoint"
-                                             :s3-endpoint  "https://unreachable-endpoint"}))]
-    (is (thrown? SdkClientException
-                 (sqs-ext/send-message unreachable-sqs-ext-client
-                                       "unreachable-queue"
-                                       {:data "here-be-dragons"})))))
+(deftest ^:functional only-acknowledge-messages-that-handler-is-available-to-process
+  (let [n        5
+        messages (into [] (take n (repeatedly helpers/random-message-basic)))
+        c        (chan)
 
-(deftest cannot-send-large-message-to-non-existing-s3-bucket
-  (let [non-existing-bucket-sqs-ext-client (sqs-ext/sqs-ext-client
-                                             (assoc fixtures/sqs-ext-config
-                                                    :s3-bucket-name
-                                                    "non-existing-bucket"))]
-    (is (thrown? AmazonServiceException
-                 (sqs-ext/send-message non-existing-bucket-sqs-ext-client
-                                       @fixtures/test-queue-url
-                                       (helpers/random-message-larger-than-256kb))))))
+        ;; setup
+        stop-receive-loop
+        (receive/receive-loop
+          @fixtures/test-queue-url
+          c
+          (partial sqs/receive-messages
+                   @fixtures/test-sqs-ext-client
+                   @fixtures/test-queue-url
+                   {:max-number-of-receiving-messages 1
+                    :wait-time-in-seconds             1})
+          (partial sqs/delete-message!
+                   @fixtures/test-sqs-ext-client
+                   @fixtures/test-queue-url)
+          {:auto-delete? false})]
+
+    (is (fn? stop-receive-loop))
+    (is (= {"ApproximateNumberOfMessages" 0, "ApproximateNumberOfMessagesNotVisible" 0}
+           (sqs/queue-attributes @fixtures/test-sqs-ext-client @fixtures/test-queue-url)))
+
+    (doseq [msg messages]
+      (sqs/send-message @fixtures/test-sqs-ext-client @fixtures/test-queue-url msg))
+
+    ;; these expected values require some explanation:
+    ;; 1. one message is read off the queue and become NotVisible
+    ;; 2. this first message is pushed to the output channel. Now the output
+    ;;    channel (default size is 1) is full.
+    ;; 3. on the next receive-loop iteration, a second message is read off the queue
+    ;; 4. but when receive-to-channel tries to put this second message to the
+    ;;    output channel, it is blocked because the output channel is full.
+    ;; 5. Thus we expect two messages to be read from the queue with
+    ;;    NotVisible values = 2
+    (is (= {"ApproximateNumberOfMessages" (- n 2), "ApproximateNumberOfMessagesNotVisible" 2}
+           (sqs/queue-attributes @fixtures/test-sqs-ext-client @fixtures/test-queue-url)))
+
+    (let [[out _] (alts!! [c (timeout 1000)])]
+      (is (:body out))
+      (is ((:done-fn out))))
+    (Thread/sleep 100) ;; wait for message to be deleted
+
+    (is (= {"ApproximateNumberOfMessages" (- n 3) , "ApproximateNumberOfMessagesNotVisible" 2}
+           (sqs/queue-attributes @fixtures/test-sqs-ext-client @fixtures/test-queue-url)))
+
+    ;; teardown
+    (stop-receive-loop)
+    (close! c)
+
+    ;; gives time for the receive-loop to stop
+    (Thread/sleep 500)))
 
