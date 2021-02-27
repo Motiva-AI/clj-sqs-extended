@@ -40,15 +40,14 @@
     (let [receiver-chan (receive/receive-to-channel mock-receiver-fn)]
       (is (instance? clojure.core.async.impl.channels.ManyToManyChannel receiver-chan))
 
-      (is (= 1 (-> mock-receiver-fn  bond/calls count)))
+      ;; this count count be 0 or 1 because it depends on responsiveness of the inner loop
+      (is (<= 0 (-> mock-receiver-fn  bond/calls count) 1))
 
       (is (= :foo (<!! receiver-chan)))
       (is (not (async-protocols/closed? receiver-chan)))
 
-      ;; this count count be 1 or 2 because it depends on responsiveness of the inner loop
-      (is (<= 1
-              (-> mock-receiver-fn  bond/calls count)
-              2)))))
+      ;; similar uncertainty as above
+      (is (<= 1 (-> mock-receiver-fn  bond/calls count) 2)))))
 
 (deftest numerous-simultaneous-receive-loops
   (let [message mock-received-messages
