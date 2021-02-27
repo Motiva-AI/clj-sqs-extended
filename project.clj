@@ -27,7 +27,7 @@
                    :resource-paths ["dev/resources"]
 
                    :dependencies [[org.clojure/tools.namespace "1.1.0"]
-                                  [circleci/bond "0.4.0"]
+                                  [circleci/bond "0.5.0"]
                                   [circleci/circleci.test "0.5.0"]
                                   [environ "1.2.0"]]
 
