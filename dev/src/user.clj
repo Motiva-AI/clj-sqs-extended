@@ -1,4 +1,4 @@
 (ns user
-  (:require [clojure.tools.namespace.repl :as ns-repl :refer [refresh-all]]
+  (:require [clojure.tools.namespace.repl :refer [refresh refresh-all]]
             [circleci.test]))
 
