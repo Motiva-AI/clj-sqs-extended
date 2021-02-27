@@ -5,8 +5,7 @@
   :license {:name "MIT License"
             :url  "https://opensource.org/licenses/MIT"}
 
-  :dependencies [[org.clojure/clojure "1.10.1"]
-                 [org.clojure/core.async "1.3.610"]
+  :dependencies [[org.clojure/core.async "1.3.610"]
                  [org.clojure/tools.logging "1.1.0"]
                  [com.amazonaws/amazon-sqs-java-extended-client-lib "1.2.0"]
                  [com.cognitect/transit-clj "1.0.324"]
@@ -26,7 +25,8 @@
                    :test-paths []
                    :resource-paths ["dev/resources"]
 
-                   :dependencies [[org.clojure/tools.namespace "1.1.0"]
+                   :dependencies [[org.clojure/clojure "1.10.2"]
+                                  [org.clojure/tools.namespace "1.1.0"]
                                   [circleci/bond "0.5.0"]
                                   [circleci/circleci.test "0.5.0"]
                                   [environ "1.2.0"]]
