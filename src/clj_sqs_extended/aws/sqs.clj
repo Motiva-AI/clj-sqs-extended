@@ -43,15 +43,19 @@
            s3-endpoint
            s3-bucket-name
            sqs-endpoint
-           region]
+           region
+           cleanup-s3-payload?]
+    :or {cleanup-s3-payload? true}
     :as   sqs-ext-config}]
   (let [endpoint (aws/configure-sqs-endpoint sqs-ext-config)
         creds (aws/configure-credentials sqs-ext-config)
-        s3-client (when (:s3-bucket-name sqs-ext-config)
+        s3-client (when s3-bucket-name
                     (s3/s3-client sqs-ext-config))
         sqs-config (cond-> (ExtendedClientConfiguration.)
-                      s3-client (.withPayloadSupportEnabled s3-client
-                                                            (:s3-bucket-name sqs-ext-config)))
+                     s3-client (.withPayloadSupportEnabled
+                                 s3-client
+                                 s3-bucket-name
+                                 cleanup-s3-payload?))
         builder (AmazonSQSClientBuilder/standard)
         builder (if endpoint (.withEndpointConfiguration builder endpoint) builder)
         builder (if creds (.withCredentials builder creds) builder)]
