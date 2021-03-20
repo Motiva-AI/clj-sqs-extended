@@ -43,7 +43,7 @@
 
 (defn exit-receive-loop!
   [queue-url loop-stats receiving-chan]
-  (log/infof "Receive-loop terminated for %s, stats: %s" queue-url loop-stats)
+  (log/errorf "Receive-loop terminated for %s, stats: %s" queue-url loop-stats)
   (close! receiving-chan)
 
   loop-stats)
