@@ -5,11 +5,11 @@
   :license {:name "MIT License"
             :url  "https://opensource.org/licenses/MIT"}
 
-  :dependencies [[org.clojure/core.async "1.3.610"]
+  :dependencies [[org.clojure/core.async "1.3.618"]
                  [org.clojure/tools.logging "1.1.0"]
                  [com.amazonaws/amazon-sqs-java-extended-client-lib "1.2.0"]
                  [ai.motiva/pipeline-transit "0.1.0-20210507.204033-6"]
-                 [org.clojure/data.json "2.2.2"]
+                 [org.clojure/data.json "2.2.3"]
                  [tick "0.4.26-alpha"]]
 
   :repl-options {:init-ns user
@@ -25,7 +25,7 @@
                    :test-paths []
                    :resource-paths ["dev/resources"]
 
-                   :dependencies [[org.clojure/clojure "1.10.2"]
+                   :dependencies [[org.clojure/clojure "1.10.3"]
                                   [org.clojure/tools.namespace "1.1.0"]
                                   [circleci/bond "0.5.0"]
                                   [circleci/circleci.test "0.5.0"]
