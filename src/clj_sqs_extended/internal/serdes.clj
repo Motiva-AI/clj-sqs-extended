@@ -1,6 +1,6 @@
 (ns clj-sqs-extended.internal.serdes
   (:require [pipeline-transit.core :as transit]
-            [cheshire.core :as json]))
+            [clojure.data.json :as json]))
 
 (defn- unsupported-format-exception
   [got]
@@ -13,7 +13,7 @@
   (if out
     (cond
       (= format :transit) (transit/write-transit-json out)
-      (= format :json) (json/generate-string out)
+      (= format :json) (json/write-str out)
       (= format :raw) out
       :else (throw (unsupported-format-exception format)))
     nil))
@@ -23,7 +23,7 @@
   (if in
     (cond
       (= format :transit) (transit/read-transit-json in)
-      (= format :json) (json/parse-string in true)
+      (= format :json) (json/read-str in :key-fn keyword)
       (= format :raw) in
       :else (throw (unsupported-format-exception format)))
     nil))
