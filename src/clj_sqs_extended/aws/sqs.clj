@@ -1,11 +1,13 @@
 (ns clj-sqs-extended.aws.sqs
   (:require [clj-sqs-extended.aws.configuration :as aws]
             [clj-sqs-extended.aws.s3 :as s3]
-            [clj-sqs-extended.internal.serdes :as serdes])
+            [clj-sqs-extended.internal.serdes :as serdes]
+            [clojure.java.data :as j]
+            [clojure.java.data.builder :as j.builder])
   (:import [com.amazon.sqs.javamessaging
             AmazonSQSExtendedClient
             ExtendedClientConfiguration]
-           [com.amazonaws.services.sqs AmazonSQSClientBuilder]
+           [com.amazonaws.services.sqs AmazonSQS AmazonSQSClientBuilder]
            [com.amazonaws.services.sqs.model
             CreateQueueRequest
             DeleteMessageRequest
@@ -21,9 +23,7 @@
 
 (defn- build-message-format-attribute-value
   [format]
-  (doto (MessageAttributeValue.)
-        (.withDataType "String")
-        (.withStringValue (str (name format)))))
+  (j/to-java MessageAttributeValue {:dataType "String" :stringValue (str (name format))}))
 
 (defn sqs-ext-client
   "Takes a map of configuration and returns a client object.
@@ -47,19 +47,23 @@
            cleanup-s3-payload?]
     :or {cleanup-s3-payload? true}
     :as   sqs-ext-config}]
-  (let [endpoint (aws/configure-sqs-endpoint sqs-ext-config)
-        creds (aws/configure-credentials sqs-ext-config)
-        s3-client (when s3-bucket-name
-                    (s3/s3-client sqs-ext-config))
+  (let [s3-client  (when s3-bucket-name (s3/s3-client sqs-ext-config))
         sqs-config (cond-> (ExtendedClientConfiguration.)
                      s3-client (.withPayloadSupportEnabled
                                  s3-client
                                  s3-bucket-name
                                  cleanup-s3-payload?))
-        builder (AmazonSQSClientBuilder/standard)
-        builder (if endpoint (.withEndpointConfiguration builder endpoint) builder)
-        builder (if creds (.withCredentials builder creds) builder)]
-    (AmazonSQSExtendedClient. (.build builder) sqs-config)))
+
+        endpoint (aws/configure-sqs-endpoint sqs-ext-config)
+        creds    (aws/configure-credentials sqs-ext-config)
+
+        builder  (j.builder/to-java AmazonSQS
+                                    (AmazonSQSClientBuilder/standard)
+                                    (cond-> {}
+                                      endpoint (assoc :endpointConfiguration endpoint)
+                                      creds    (assoc :credentials creds))
+                                    {})]
+    (AmazonSQSExtendedClient. builder sqs-config)))
 
 (defn build-create-queue-request-with-attributes
   [queue-name
@@ -227,11 +231,13 @@
 
 (defn- receive-messages-request
   [queue-url wait-time-in-seconds max-number-of-receiving-messages]
-  (doto (ReceiveMessageRequest. queue-url)
-      (.setWaitTimeSeconds (int wait-time-in-seconds))
-      ;; this below is to satisfy some quirk with SQS for our custom serdes-format attribute to be received
-      (.setMessageAttributeNames [clj-sqs-ext-format-attribute])
-      (.setMaxNumberOfMessages (when max-number-of-receiving-messages (int max-number-of-receiving-messages)))))
+  (j/to-java ReceiveMessageRequest
+             (with-meta
+               {:waitTimeSeconds (int wait-time-in-seconds)
+                ;; this below is to satisfy some quirk with SQS for our custom serdes-format attribute to be received
+                :messageAttributeNames [clj-sqs-ext-format-attribute]
+                :maxNumberOfMessages (when max-number-of-receiving-messages (int max-number-of-receiving-messages))}
+               {::j/constructor [queue-url]})))
 
 (defn wait-and-receive-messages-from-sqs
   [sqs-client queue-url

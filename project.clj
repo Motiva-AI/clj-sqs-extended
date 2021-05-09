@@ -10,7 +10,8 @@
                  [com.amazonaws/amazon-sqs-java-extended-client-lib "1.2.0"]
                  [ai.motiva/pipeline-transit "0.1.0"]
                  [org.clojure/data.json "2.2.3"]
-                 [tick "0.4.26-alpha"]]
+                 [tick "0.4.26-alpha"]
+                 [org.clojure/java.data "1.0.86"]]
 
   :repl-options {:init-ns user
                  :timeout 120000}
