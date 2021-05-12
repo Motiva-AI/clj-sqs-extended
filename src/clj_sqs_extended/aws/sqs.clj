@@ -62,12 +62,12 @@
     (AmazonSQSExtendedClient. (.build builder) sqs-config)))
 
 (defn build-create-queue-request-with-attributes
-  [name
+  [queue-name
    {:keys [fifo
            visibility-timeout-in-seconds
            kms-master-key-id
            kms-data-key-reuse-period]}]
-  (cond-> (CreateQueueRequest. name)
+  (cond-> (CreateQueueRequest. queue-name)
     fifo
     (.addAttributesEntry "FifoQueue"
                          "true")
@@ -85,11 +85,11 @@
                          (str kms-data-key-reuse-period))))
 
 (defn- create-queue
-  ([sqs-client name]
-   (create-queue sqs-client name {}))
+  ([sqs-client queue-name]
+   (create-queue sqs-client queue-name {}))
 
-  ([sqs-client name attributes]
-   (->> (build-create-queue-request-with-attributes name attributes)
+  ([sqs-client queue-name attributes]
+   (->> (build-create-queue-request-with-attributes queue-name attributes)
         (.createQueue sqs-client)
         (.getQueueUrl))))
 
