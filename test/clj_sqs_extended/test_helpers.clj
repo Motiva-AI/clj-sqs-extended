@@ -1,5 +1,5 @@
 (ns clj-sqs-extended.test-helpers
-  (:require [tick.alpha.api :as t])
+  (:require [tick.core :as t])
   (:import [java.util UUID]))
 
 (defn random-bucket-name

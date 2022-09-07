@@ -3,7 +3,7 @@
             [clojure.core.async.impl.protocols :as async-protocols]
 
             [clojure.tools.logging :as log]
-            [tick.alpha.api :as t]
+            [tick.core :as t]
             [clj-sqs-extended.aws.sqs :as sqs])
   (:import [java.net
             SocketException
