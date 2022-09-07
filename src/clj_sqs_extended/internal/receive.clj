@@ -3,12 +3,7 @@
             [clojure.core.async.impl.protocols :as async-protocols]
 
             [clojure.tools.logging :as log]
-            [tick.core :as t]
-            [clj-sqs-extended.aws.sqs :as sqs])
-  (:import [java.net
-            SocketException
-            UnknownHostException]
-           [java.net.http HttpTimeoutException]))
+            [tick.core :as t]))
 
 (defn- seconds-between
   [t1 t2]
