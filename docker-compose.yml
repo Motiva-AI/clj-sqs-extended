@@ -9,6 +9,7 @@ services:
       - ACCESS_KEY=local
       - SECRET_KEY=local
 
+      - REGION=us-east-1
       - S3_ENDPOINT=http://localstack:4566
       - SQS_ENDPOINT=http://localstack:4566
 
