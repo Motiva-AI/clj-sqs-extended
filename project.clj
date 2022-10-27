@@ -7,7 +7,7 @@
 
   :dependencies [[org.clojure/core.async "1.5.648"]
                  [org.clojure/tools.logging "1.2.4"]
-                 [com.amazonaws/amazon-sqs-java-extended-client-lib "1.2.0"]
+                 [com.amazonaws/amazon-sqs-java-extended-client-lib "1.2.2"]
                  [ai.motiva/pipeline-transit "0.1.0"]
                  [org.clojure/data.json "2.4.0"]
                  [tick "0.5.0"]]
