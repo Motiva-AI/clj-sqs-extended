@@ -5,5 +5,7 @@
                     junit/reporter]
 
  :selectors {:acceptance  (fn [m] (or (:integration m) (:functional m)))
+             :integration :integration
+             :functional  :functional
              :default     (complement :acceptance)
              :all         (constantly true)}}
