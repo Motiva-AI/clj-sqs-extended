@@ -35,7 +35,7 @@
                          :secret-key             "default"
                          :sqs-endpoint           "http://localhost:4566"
                          :s3-endpoint            "http://localhost:4566"
-                         :region                 "us-east-2"
+                         :region                 "us-west-2"
                          :integration-access-key ""
                          :integration-secret-key ""}}
 

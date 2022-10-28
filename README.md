@@ -22,7 +22,7 @@ $ make devel
    :s3-endpoint    "http://localhost:4566"
    :s3-bucket-name "example-bucket"
    :sqs-endpoint   "http://localhost:4566"
-   :region         "us-east-2"})
+   :region         "us-west-2"})
 (def client (sqs-ext/sqs-ext-client config))
 (def queue-url (sqs/create-standard-queue! client "my-test-queue"))
 ; "http://localstack:4566/000000000000/my-test-queue"
