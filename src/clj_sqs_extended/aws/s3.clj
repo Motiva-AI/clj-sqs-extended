@@ -13,8 +13,11 @@
         creds (aws/configure-credentials sqs-ext-config)
         builder (-> (AmazonS3ClientBuilder/standard)
                     (.withPathStyleAccessEnabled true))
-        builder (if region (.withRegion builder region) builder)
-        builder (if endpoint (.withEndpointConfiguration builder endpoint) builder)
+        builder (if endpoint
+                  (.withEndpointConfiguration builder endpoint)
+                  (if region
+                    (.withRegion builder region)
+                    builder))
         builder (if creds (.withCredentials builder creds) builder)]
     (.build builder)))
 
