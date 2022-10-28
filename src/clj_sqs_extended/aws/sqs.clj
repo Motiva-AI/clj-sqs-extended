@@ -57,8 +57,11 @@
                                  s3-bucket-name
                                  cleanup-s3-payload?))
         builder (AmazonSQSClientBuilder/standard)
-        builder (if region (.withRegion builder region) builder)
-        builder (if endpoint (.withEndpointConfiguration builder endpoint) builder)
+        builder (if endpoint
+                  (.withEndpointConfiguration builder endpoint)
+                  (if region
+                    (.withRegion builder region)
+                    builder))
         builder (if creds (.withCredentials builder creds) builder)]
     (AmazonSQSExtendedClient. (.build builder) sqs-config)))
 
