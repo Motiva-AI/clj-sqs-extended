@@ -9,10 +9,10 @@
 (defn sqs-ext-config []
   {:access-key     (env :integration-access-key)
    :secret-key     (env :integration-secret-key)
-   :sqs-endpoint   "https://sqs.us-west-2.amazonaws.com"
-   :s3-endpoint    "https://s3.us-west-2.amazonaws.com"
+   :sqs-endpoint   "https://sqs.us-east-1.amazonaws.com"
+   :s3-endpoint    "https://s3.us-east-1.amazonaws.com"
    :s3-bucket-name (env :integration-test-s3-bucket-name)
-   :region         "us-west-2"})
+   :region         "us-east-1"})
 
 (defonce integration-sqs-ext-client (atom nil))
 (def standard-queue-url (env :integration-test-standard-queue-url))

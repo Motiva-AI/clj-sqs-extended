@@ -11,7 +11,7 @@
    :s3-endpoint    "http://localhost:4566"
    :s3-bucket-name "example-bucket"
    :sqs-endpoint   "http://localhost:4566"
-   :region         "us-west-2"})
+   :region         "us-east-1"})
 
 ;; Conveniance declarations
 (def sqs-ext-client    sqs/sqs-ext-client)
